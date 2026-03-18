@@ -16,6 +16,21 @@ function Logo() {
   );
 }
 
+function TierBadge({ tier }: { tier: "meme" | "hedge_fund" }) {
+  if (tier === "meme") {
+    return (
+      <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-pink/15 text-neon-pink border border-neon-pink/30 font-display font-bold">
+        🎭 MEME
+      </span>
+    );
+  }
+  return (
+    <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-gold/15 text-neon-cyan border border-neon-cyan/30 font-display font-bold">
+      🏦 HEDGE FUND
+    </span>
+  );
+}
+
 function PriceTicker({ prices }: { prices: any[] }) {
   if (!prices || prices.length === 0) return null;
   const doubled = [...prices, ...prices];
@@ -65,13 +80,16 @@ export default function Home() {
     queryKey: ["/api/leaderboard"],
   });
 
+  const agentTier: "meme" | "hedge_fund" = meData?.agentTier || "meme";
+  const isHF = agentTier === "hedge_fund";
+
   const { data: hfMapping } = useQuery<any[]>({
     queryKey: ["/api/agents", meData?.user?.selectedAgentType, "hedge-fund"],
     queryFn: async () => {
       const res = await fetch(`/api/agents/${meData?.user?.selectedAgentType}/hedge-fund`);
       return res.json();
     },
-    enabled: !!meData?.user?.selectedAgentType,
+    enabled: !!meData?.user?.selectedAgentType && !isHF,
   });
 
   const user = meData?.user;
@@ -143,10 +161,15 @@ export default function Home() {
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-display font-bold text-[#E8E8E8]">{agent.name}</span>
+                <TierBadge tier={agentTier} />
               </div>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">
-                {agent.personality}
-              </span>
+              {isHF ? (
+                <p className="text-[10px] text-[#888899] mt-1 line-clamp-2">{agent.tradingPhilosophy}</p>
+              ) : (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">
+                  {agent.personality}
+                </span>
+              )}
             </div>
           </div>
           {/* Speech Bubble */}
@@ -160,18 +183,29 @@ export default function Home() {
             <span className={`font-mono-num text-lg font-bold ${displayPnl >= 0 ? "text-neon-green text-glow-green" : "text-neon-pink text-glow-pink"}`}>
               {displayPnl >= 0 ? "+" : "-"}${Math.abs(displayPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })} today {displayPnl >= 0 ? "🔥" : "📉"}
             </span>
-            <button
-              data-testid="btn-follow-agent"
-              className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
-            >
-              Follow Agent's Play
-            </button>
+            {isHF ? (
+              <Link href={`/signals/${user?.selectedAgentType}`}>
+                <button
+                  data-testid="btn-follow-agent"
+                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
+                >
+                  Follow Agent's Play
+                </button>
+              </Link>
+            ) : (
+              <button
+                data-testid="btn-follow-agent"
+                className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
+              >
+                Follow Agent's Play
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Powered By HF Agents */}
-      {hfMapping && hfMapping.length > 0 && (
+      {/* Powered By HF Agents — Only show for Meme agents */}
+      {!isHF && hfMapping && hfMapping.length > 0 && (
         <div className="mx-4 mt-3 rounded-2xl bg-[#12121A] border border-[#2A2A3E] p-3">
           <p className="text-[10px] text-[#555566] font-display mb-2">⚡ Powered by</p>
           <div className="flex items-center gap-2 flex-wrap">

@@ -15,9 +15,12 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (!user) return res.status(404).json({ message: "User not found" });
     const portfolio = storage.getPortfolio(DEMO_USER_ID);
     const leaderboardEntry = storage.getLeaderboardEntry(DEMO_USER_ID);
-    const agent = storage.getAgent(user.selectedAgentType);
+    const memeAgent = storage.getAgent(user.selectedAgentType);
+    const hfAgent = !memeAgent ? storage.getHedgeFundAgent(user.selectedAgentType) : null;
+    const agent = memeAgent || hfAgent;
+    const agentTier = memeAgent ? "meme" : hfAgent ? "hedge_fund" : "meme";
     const achievements = storage.getUserAchievements(DEMO_USER_ID);
-    res.json({ user, portfolio, leaderboardEntry, agent, achievements });
+    res.json({ user, portfolio, leaderboardEntry, agent, agentTier, achievements });
   });
 
   // Update user (e.g., switch agent)
