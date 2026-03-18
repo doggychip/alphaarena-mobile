@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
+import { Link } from "wouter";
 
 const MOOD_MAP: Record<string, { emoji: string; label: string; color: string }> = {
   euphoric: { emoji: "🤑", label: "Euphoric", color: "#00FF88" },
@@ -61,6 +62,15 @@ export default function AgentPage() {
   const { data: chatMessages } = useQuery<any>({
     queryKey: ["/api/agent/messages"],
     refetchInterval: 30000,
+  });
+
+  const { data: hfMapping } = useQuery<any[]>({
+    queryKey: ["/api/agents", meData?.user?.selectedAgentType, "hedge-fund"],
+    queryFn: async () => {
+      const res = await fetch(`/api/agents/${meData?.user?.selectedAgentType}/hedge-fund`);
+      return res.json();
+    },
+    enabled: !!meData?.user?.selectedAgentType,
   });
 
   const user = meData?.user;
@@ -166,6 +176,41 @@ export default function AgentPage() {
         <StatCard emoji="💀" label="Worst Trade" value={`-$${Math.abs(agentStats.worstTrade.amount).toLocaleString()}`} subtext={agentStats.worstTrade.pair} color="#FF3B9A" />
         <StatCard emoji="📊" label="Total Trades" value={agentStats.totalTrades.toString()} color="#00D4FF" />
       </div>
+
+      {/* Brain Trust — Underlying HF Agents */}
+      {hfMapping && hfMapping.length > 0 && (
+        <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
+          <p className="text-xs text-[#888899] font-display mb-3">🧠 Brain Trust</p>
+          <p className="text-[10px] text-[#555566] mb-3">
+            The hedge fund agents powering {agent?.name}'s analysis
+          </p>
+          <div className="space-y-2">
+            {hfMapping.map((m: any) => {
+              const signalColor = m.latestSignal?.signal === "bullish" ? "text-neon-green" : m.latestSignal?.signal === "bearish" ? "text-neon-pink" : "text-neon-gold";
+              const signalEmoji = m.latestSignal?.signal === "bullish" ? "🟢" : m.latestSignal?.signal === "bearish" ? "🔴" : "🟡";
+              return (
+                <Link key={m.hedgeFundAgentId} href={`/signals/${m.hedgeFundAgentId}`}>
+                  <div className="flex items-center gap-3 py-2 px-3 rounded-xl bg-[#12121A] border border-[#2A2A3E] cursor-pointer hover:border-neon-cyan/30 transition-colors">
+                    <span className="text-xl">{m.hfAgent?.avatarEmoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display font-semibold text-sm text-[#E8E8E8]">{m.hfAgent?.name}</p>
+                      <p className="text-[10px] text-[#888899]">Weight: {Math.round(m.weight * 100)}%</p>
+                    </div>
+                    {m.latestSignal && (
+                      <div className="text-right">
+                        <span className={`text-[10px] font-display font-bold ${signalColor}`}>
+                          {signalEmoji} {m.latestSignal.signal?.toUpperCase()}
+                        </span>
+                        <p className="text-[9px] font-mono-num text-[#888899]">{m.latestSignal.confidence}%</p>
+                      </div>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Switch Agent Button */}
       <div className="mx-4 mt-4 mb-4">

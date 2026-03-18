@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
+import { Link } from "wouter";
 import TradeModal from "@/components/TradeModal";
 
 // AlphaArena Logo SVG
@@ -62,6 +63,15 @@ export default function Home() {
 
   const { data: leaderboardData } = useQuery<any>({
     queryKey: ["/api/leaderboard"],
+  });
+
+  const { data: hfMapping } = useQuery<any[]>({
+    queryKey: ["/api/agents", meData?.user?.selectedAgentType, "hedge-fund"],
+    queryFn: async () => {
+      const res = await fetch(`/api/agents/${meData?.user?.selectedAgentType}/hedge-fund`);
+      return res.json();
+    },
+    enabled: !!meData?.user?.selectedAgentType,
   });
 
   const user = meData?.user;
@@ -156,6 +166,23 @@ export default function Home() {
             >
               Follow Agent's Play
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Powered By HF Agents */}
+      {hfMapping && hfMapping.length > 0 && (
+        <div className="mx-4 mt-3 rounded-2xl bg-[#12121A] border border-[#2A2A3E] p-3">
+          <p className="text-[10px] text-[#555566] font-display mb-2">⚡ Powered by</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            {hfMapping.map((m: any) => (
+              <Link key={m.hedgeFundAgentId} href={`/signals/${m.hedgeFundAgentId}`}>
+                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#1A1A2E] border border-[#2A2A3E] cursor-pointer hover:border-neon-cyan/30 transition-colors">
+                  <span className="text-sm">{m.hfAgent?.avatarEmoji}</span>
+                  <span className="text-[10px] font-display text-[#E8E8E8]">{m.hfAgent?.name}</span>
+                </div>
+              </Link>
+            ))}
           </div>
         </div>
       )}

@@ -314,11 +314,117 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const userId = parseInt(req.params.id);
     const user = storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
-    
+
     const leaderboardEntry = storage.getLeaderboardEntry(userId);
     const agent = storage.getAgent(user.selectedAgentType);
     const achievements = storage.getUserAchievements(userId);
-    
+
     res.json({ user, leaderboardEntry, agent, achievements });
+  });
+
+  // === HEDGE FUND AGENTS ===
+
+  // List all 19 hedge fund agents
+  app.get("/api/hf-agents", (_req, res) => {
+    const agents = storage.getAllHedgeFundAgents();
+    res.json(agents);
+  });
+
+  // Single agent detail with latest signals
+  app.get("/api/hf-agents/:agentId", (req, res) => {
+    const agent = storage.getHedgeFundAgent(req.params.agentId);
+    if (!agent) return res.status(404).json({ message: "Hedge fund agent not found" });
+    const latestSignals = storage.getSignalsByAgent(agent.agentId, 20);
+    const stats = storage.getAgentSignalStats(agent.agentId);
+    res.json({ agent, latestSignals, stats });
+  });
+
+  // All signals for an agent
+  app.get("/api/hf-agents/:agentId/signals", (req, res) => {
+    const ticker = req.query.ticker as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    let signals = storage.getSignalsByAgent(req.params.agentId, limit);
+    if (ticker) signals = signals.filter(s => s.ticker === ticker);
+    res.json(signals);
+  });
+
+  // === SIGNALS ===
+
+  // Global live signals feed
+  app.get("/api/signals", (req, res) => {
+    const ticker = req.query.ticker as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    let signals = storage.getLatestSignals(limit * 2); // get extra then filter
+    if (ticker) signals = signals.filter(s => s.ticker === ticker);
+    res.json(signals.slice(0, limit));
+  });
+
+  // All agent signals for a specific ticker
+  app.get("/api/signals/ticker/:ticker", (req, res) => {
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    const signals = storage.getSignalsByTicker(req.params.ticker, limit);
+    res.json(signals);
+  });
+
+  // Latest signal from each agent (live board)
+  app.get("/api/signals/latest", (_req, res) => {
+    const agents = storage.getAllHedgeFundAgents();
+    const latestSignals = agents.map(agent => {
+      const signal = storage.getLatestSignalByAgent(agent.agentId);
+      return signal ? { agent, signal } : null;
+    }).filter(Boolean);
+    res.json(latestSignals);
+  });
+
+  // === MEME AGENT → HEDGE FUND MAPPING ===
+
+  // Get hedge fund agents powering a meme agent
+  app.get("/api/agents/:type/hedge-fund", (req, res) => {
+    const mappings = storage.getMemeAgentMapping(req.params.type);
+    const enriched = mappings.map(m => {
+      const hfAgent = storage.getHedgeFundAgent(m.hedgeFundAgentId);
+      const latestSignal = storage.getLatestSignalByAgent(m.hedgeFundAgentId);
+      return { ...m, hfAgent, latestSignal };
+    });
+    res.json(enriched);
+  });
+
+  // Composite signal for meme agent
+  app.get("/api/agents/:type/composite-signal", (req, res) => {
+    const ticker = (req.query.ticker as string) || "BTC";
+    const composite = storage.getCompositeSignal(req.params.type, ticker);
+    if (!composite) return res.json({ signal: "neutral", confidence: 50, contributors: [] });
+    res.json(composite);
+  });
+
+  // === HF AGENT STAKING ===
+
+  // Stake on a hedge fund agent
+  app.post("/api/staking/stake-agent", (req, res) => {
+    const { hedgeFundAgentId, amount } = req.body;
+    if (!hedgeFundAgentId || !amount || amount <= 0) {
+      return res.status(400).json({ message: "Invalid hedgeFundAgentId or amount" });
+    }
+    const user = storage.getUser(DEMO_USER_ID);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (user.credits < amount) return res.status(400).json({ message: "Insufficient credits" });
+
+    const agent = storage.getHedgeFundAgent(hedgeFundAgentId);
+    if (!agent) return res.status(404).json({ message: "Hedge fund agent not found" });
+
+    storage.addHfAgentStake(DEMO_USER_ID, hedgeFundAgentId, amount);
+    storage.updateUser(DEMO_USER_ID, { credits: user.credits - amount });
+
+    res.json({ message: "Staked on agent successfully", agent: agent.name });
+  });
+
+  // Get user's HF agent stakes
+  app.get("/api/staking/agent-stakes", (_req, res) => {
+    const stakes = storage.getHfAgentStakes(DEMO_USER_ID);
+    const enriched = stakes.map(s => {
+      const agent = storage.getHedgeFundAgent(s.hedgeFundAgentId);
+      return { ...s, agent };
+    });
+    res.json(enriched);
   });
 }

@@ -1,0 +1,229 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useState } from "react";
+import { useRoute } from "wouter";
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+function SignalBadge({ signal }: { signal: string }) {
+  const config: Record<string, { emoji: string; text: string; color: string; bg: string; border: string }> = {
+    bullish: { emoji: "🟢", text: "BULLISH", color: "text-neon-green", bg: "bg-neon-green/10", border: "border-neon-green/30" },
+    bearish: { emoji: "🔴", text: "BEARISH", color: "text-neon-pink", bg: "bg-neon-pink/10", border: "border-neon-pink/30" },
+    neutral: { emoji: "🟡", text: "NEUTRAL", color: "text-neon-gold", bg: "bg-neon-gold/10", border: "border-neon-gold/30" },
+  };
+  const c = config[signal] || config.neutral;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-display font-bold ${c.color} ${c.bg} border ${c.border}`}>
+      {c.emoji} {c.text}
+    </span>
+  );
+}
+
+function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="rounded-xl bg-[#12121A] border border-[#2A2A3E] p-3 text-center">
+      <p className="text-[10px] text-[#888899] font-display mb-1">{label}</p>
+      <p className="font-mono-num text-lg font-bold" style={{ color }}>{value}</p>
+    </div>
+  );
+}
+
+export default function HFAgentDetail() {
+  const [, params] = useRoute("/signals/:agentId");
+  const agentId = params?.agentId;
+  const queryClient = useQueryClient();
+  const [stakeAmount, setStakeAmount] = useState(100);
+  const [staking, setStaking] = useState(false);
+
+  const { data } = useQuery<any>({
+    queryKey: ["/api/hf-agents", agentId],
+    queryFn: async () => {
+      const res = await fetch(`/api/hf-agents/${agentId}`);
+      return res.json();
+    },
+    enabled: !!agentId,
+  });
+
+  const agent = data?.agent;
+  const latestSignals = data?.latestSignals || [];
+  const stats = data?.stats;
+
+  const handleStake = async () => {
+    if (staking) return;
+    setStaking(true);
+    try {
+      await apiRequest("POST", "/api/staking/stake-agent", { hedgeFundAgentId: agentId, amount: stakeAmount });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staking/agent-stakes"] });
+    } catch {
+      // ignore
+    }
+    setStaking(false);
+  };
+
+  if (!agent) {
+    return (
+      <div className="flex flex-col min-h-screen items-center justify-center">
+        <span className="text-4xl animate-pulse">📡</span>
+        <p className="text-[#888899] mt-2 font-display">Loading agent...</p>
+      </div>
+    );
+  }
+
+  // Group signals by ticker
+  const signalsByTicker: Record<string, any[]> = {};
+  for (const s of latestSignals) {
+    if (!signalsByTicker[s.ticker]) signalsByTicker[s.ticker] = [];
+    signalsByTicker[s.ticker].push(s);
+  }
+
+  // Accuracy chart data (simplified — just show resolved signals)
+  const resolved = latestSignals.filter((s: any) => s.isCorrect !== null);
+  const correct = resolved.filter((s: any) => s.isCorrect === true).length;
+  const incorrect = resolved.length - correct;
+
+  const riskColors: Record<string, string> = { low: "#00FF88", medium: "#FFD700", high: "#FF3B9A" };
+
+  return (
+    <div className="flex flex-col min-h-screen">
+      {/* Header */}
+      <header className="sticky top-0 z-40 px-4 py-3 flex items-center gap-3" style={{ background: "rgba(10, 10, 15, 0.9)", backdropFilter: "blur(12px)" }}>
+        <button onClick={() => window.history.back()} className="text-[#888899] hover:text-[#E8E8E8] text-lg">←</button>
+        <h1 className="font-display font-bold text-lg text-[#E8E8E8]">Agent Detail</h1>
+      </header>
+
+      {/* Agent Profile */}
+      <div className="mx-4 mt-2 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-6 text-center">
+        <div className="w-20 h-20 rounded-full bg-[#0A0A0F] border-2 border-neon-cyan mx-auto flex items-center justify-center text-4xl">
+          {agent.avatarEmoji}
+        </div>
+        <h2 className="font-display font-bold text-xl text-[#E8E8E8] mt-3">{agent.name}</h2>
+        <div className="flex justify-center gap-2 mt-2">
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">{agent.category}</span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-display" style={{ backgroundColor: `${riskColors[agent.riskTolerance]}15`, color: riskColors[agent.riskTolerance], border: `1px solid ${riskColors[agent.riskTolerance]}30` }}>
+            {agent.riskTolerance} risk
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#2A2A3E] text-[#888899] font-display">{agent.assetFocus}</span>
+        </div>
+        <p className="text-xs text-[#888899] mt-3 leading-relaxed">{agent.description}</p>
+        <div className="mt-3 bg-[#12121A] rounded-xl p-3">
+          <p className="text-[10px] text-[#555566] font-display mb-1">Trading Philosophy</p>
+          <p className="text-xs text-[#E8E8E8] italic leading-relaxed">"{agent.tradingPhilosophy}"</p>
+        </div>
+      </div>
+
+      {/* Stats Row */}
+      <div className="mx-4 mt-4 grid grid-cols-4 gap-2">
+        <StatBox label="Win Rate" value={`${stats?.winRate || 0}%`} color="#00FF88" />
+        <StatBox label="Signals" value={`${stats?.totalSignals || 0}`} color="#00D4FF" />
+        <StatBox label="Avg Conf" value={`${stats?.avgConfidence || 0}%`} color="#FFD700" />
+        <StatBox label="Risk" value={agent.riskTolerance} color={riskColors[agent.riskTolerance]} />
+      </div>
+
+      {/* Accuracy Chart (simple bar) */}
+      {resolved.length > 0 && (
+        <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
+          <p className="text-xs text-[#888899] font-display mb-3">📊 Signal Accuracy</p>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="flex gap-1 h-4 rounded-full overflow-hidden">
+                {correct > 0 && (
+                  <div className="bg-neon-green rounded-full" style={{ width: `${(correct / resolved.length) * 100}%` }} />
+                )}
+                {incorrect > 0 && (
+                  <div className="bg-neon-pink rounded-full" style={{ width: `${(incorrect / resolved.length) * 100}%` }} />
+                )}
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-[10px] text-neon-green font-mono-num">{correct} correct</span>
+                <span className="text-[10px] text-neon-pink font-mono-num">{incorrect} incorrect</span>
+              </div>
+            </div>
+            <div className="text-center">
+              <span className="font-mono-num text-2xl font-bold text-neon-green">{Math.round((correct / resolved.length) * 100)}%</span>
+              <p className="text-[8px] text-[#888899]">accuracy</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Signal History by Ticker */}
+      <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
+        <p className="text-xs text-[#888899] font-display mb-3">📡 Recent Signals</p>
+        <div className="space-y-2 max-h-[400px] overflow-y-auto hide-scrollbar">
+          {latestSignals.slice(0, 20).map((signal: any) => {
+            let reasoning = "";
+            try { reasoning = JSON.parse(signal.reasoning).summary; } catch { reasoning = signal.reasoning; }
+            return (
+              <div key={signal.id} className="flex items-start gap-2 py-2 border-b border-[#2A2A3E] last:border-0">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-display font-bold text-xs text-[#E8E8E8]">{signal.ticker}</span>
+                    <SignalBadge signal={signal.signal} />
+                    <span className="text-[10px] font-mono-num text-[#888899]">{signal.confidence}%</span>
+                  </div>
+                  {reasoning && <p className="text-[10px] text-[#888899] mt-0.5 line-clamp-1">{reasoning}</p>}
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {signal.targetPrice && (
+                      <span className="text-[9px] font-mono-num text-[#555566]">
+                        TP: ${signal.targetPrice < 1 ? signal.targetPrice.toFixed(4) : signal.targetPrice.toLocaleString()}
+                      </span>
+                    )}
+                    <span className="text-[9px] text-[#555566]">{timeAgo(signal.createdAt)}</span>
+                    {signal.isCorrect !== null && (
+                      <span className={`text-[9px] ${signal.isCorrect ? "text-neon-green" : "text-neon-pink"}`}>
+                        {signal.isCorrect ? "✓" : "✗"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Stake CTA */}
+      <div className="mx-4 mt-4 mb-4 rounded-2xl bg-[#1A1A2E] border border-neon-green/20 p-4">
+        <p className="text-xs text-[#888899] font-display mb-3">🔥 Stake on {agent.name}</p>
+        <div className="flex gap-2 mb-3">
+          {[50, 100, 250, 500].map(amt => (
+            <button
+              key={amt}
+              onClick={() => setStakeAmount(amt)}
+              className={`flex-1 py-2 rounded-xl text-xs font-display font-bold transition-all ${
+                stakeAmount === amt
+                  ? "bg-neon-green/20 text-neon-green border border-neon-green/40"
+                  : "bg-[#12121A] text-[#888899] border border-[#2A2A3E]"
+              }`}
+            >
+              {amt}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={handleStake}
+          disabled={staking}
+          className="w-full py-3 rounded-2xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform disabled:opacity-50"
+        >
+          {staking ? "Staking..." : `Stake ${stakeAmount} Credits`}
+        </button>
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 pb-4 text-center">
+        <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#555566]">
+          Created with Perplexity Computer
+        </a>
+      </div>
+    </div>
+  );
+}

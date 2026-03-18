@@ -7,6 +7,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/Home";
 import Arena from "@/pages/Arena";
 import AgentPage from "@/pages/AgentPage";
+import Signals from "@/pages/Signals";
+import HFAgentDetail from "@/pages/HFAgentDetail";
 import Stake from "@/pages/Stake";
 import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
@@ -17,6 +19,7 @@ function BottomNav() {
   const tabs = [
     { path: "/", label: "Home", emoji: "🏠" },
     { path: "/arena", label: "Arena", emoji: "⚔️" },
+    { path: "/signals", label: "Signals", emoji: "📡" },
     { path: "/stake", label: "Stake", emoji: "🔥" },
     { path: "/profile", label: "Profile", emoji: "👤" },
   ];
@@ -76,6 +79,8 @@ function AppRouter() {
           <Route path="/" component={Home} />
           <Route path="/arena" component={Arena} />
           <Route path="/agent" component={AgentPage} />
+          <Route path="/signals" component={Signals} />
+          <Route path="/signals/:agentId" component={HFAgentDetail} />
           <Route path="/stake" component={Stake} />
           <Route path="/profile" component={Profile} />
           <Route component={NotFound} />

@@ -11,6 +11,9 @@ import type {
   AgentMessage, InsertAgentMessage,
   Stake, InsertStake,
   StakingReward, InsertStakingReward,
+  HedgeFundAgent, InsertHedgeFundAgent,
+  AgentSignal, InsertAgentSignal,
+  MemeAgentMapping, InsertMemeAgentMapping,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -66,6 +69,26 @@ export interface IStorage {
   getRewardsByStaker(stakerId: number): StakingReward[];
   addReward(reward: InsertStakingReward): StakingReward;
   getStakingLeaderboard(): { targetUserId: number; totalStaked: number; stakerCount: number }[];
+
+  // Hedge Fund Agents
+  getHedgeFundAgent(agentId: string): HedgeFundAgent | undefined;
+  getAllHedgeFundAgents(): HedgeFundAgent[];
+  getHedgeFundAgentsByCategory(category: string): HedgeFundAgent[];
+
+  // Agent Signals
+  getSignalsByAgent(agentId: string, limit?: number): AgentSignal[];
+  getSignalsByTicker(ticker: string, limit?: number): AgentSignal[];
+  getLatestSignals(limit?: number): AgentSignal[];
+  getLatestSignalByAgent(agentId: string, ticker?: string): AgentSignal | undefined;
+  getAgentSignalStats(agentId: string): { winRate: number; totalSignals: number; avgConfidence: number };
+
+  // Meme ↔ HF Mapping
+  getMemeAgentMapping(memeAgentType: string): MemeAgentMapping[];
+  getCompositeSignal(memeAgentType: string, ticker: string): { signal: string; confidence: number; contributors: any[] } | undefined;
+
+  // HF Agent Staking
+  getHfAgentStakes(stakerId: number): { hedgeFundAgentId: string; amount: number; stakedAt: string }[];
+  addHfAgentStake(stakerId: number, hedgeFundAgentId: string, amount: number): void;
 }
 
 // Seed data
@@ -458,7 +481,180 @@ function generateSeedData() {
     });
   }
 
-  return { agents, users, competition, portfolios, positions, trades, snapshots, leaderboard, userAchievements, agentMessagesData, achievementDefs, stakesData, rewardsData };
+  // === HEDGE FUND AGENTS ===
+  const hedgeFundAgentsSeed: HedgeFundAgent[] = [
+    { id: 1, agentId: "warren_buffett", name: "Warren Buffett", category: "persona", description: "Value investing, moat analysis, intrinsic value. Buys great companies at fair prices.", tradingPhilosophy: "Buy wonderful companies at fair prices. Focus on economic moats and long-term compounding.", avatarEmoji: "🏛️", riskTolerance: "low", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 2, agentId: "charlie_munger", name: "Charlie Munger", category: "persona", description: "Quality businesses, rational thinking. Buffett's partner with a multi-disciplinary approach.", tradingPhilosophy: "Invert, always invert. Buy quality businesses and hold forever.", avatarEmoji: "📚", riskTolerance: "low", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 3, agentId: "ben_graham", name: "Ben Graham", category: "persona", description: "Father of value investing. Margin of safety, deep value, net-net analysis.", tradingPhilosophy: "Margin of safety is everything. Buy below intrinsic value.", avatarEmoji: "📐", riskTolerance: "low", assetFocus: "equity", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 4, agentId: "peter_lynch", name: "Peter Lynch", category: "persona", description: "Buy what you know. Growth at reasonable price (GARP).", tradingPhilosophy: "Invest in what you understand. Look for ten-baggers in everyday life.", avatarEmoji: "🔍", riskTolerance: "medium", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 5, agentId: "phil_fisher", name: "Phil Fisher", category: "persona", description: "Scuttlebutt research, management quality, long-term growth.", tradingPhilosophy: "Deep qualitative research. Hold outstanding companies for decades.", avatarEmoji: "🎯", riskTolerance: "medium", assetFocus: "equity", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 6, agentId: "cathie_wood", name: "Cathie Wood", category: "persona", description: "Disruptive innovation, high growth, future-forward bets.", tradingPhilosophy: "Invest in disruptive innovation with 5-year horizons. Conviction over consensus.", avatarEmoji: "🚀", riskTolerance: "high", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 7, agentId: "stanley_druckenmiller", name: "Stanley Druckenmiller", category: "persona", description: "Macro trends, large directional bets, timing matters.", tradingPhilosophy: "Find the trend, size up, and ride it. Macro drives everything.", avatarEmoji: "🌊", riskTolerance: "high", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 8, agentId: "michael_burry", name: "Michael Burry", category: "persona", description: "Contrarian. Shorts overvalued assets. The Big Short legend.", tradingPhilosophy: "Be contrarian. Find bubbles and bet against them. Deep forensic analysis.", avatarEmoji: "🔮", riskTolerance: "high", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 9, agentId: "bill_ackman", name: "Bill Ackman", category: "persona", description: "Activist investing, unlocking value through corporate change.", tradingPhilosophy: "Take concentrated positions and push for change. Activism creates alpha.", avatarEmoji: "⚔️", riskTolerance: "high", assetFocus: "equity", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 10, agentId: "aswath_damodaran", name: "Aswath Damodaran", category: "persona", description: "The Dean of Valuation. Rigorous DCF, equity risk premiums.", tradingPhilosophy: "Valuation is a discipline, not an art. Every asset has an intrinsic value.", avatarEmoji: "📊", riskTolerance: "medium", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 11, agentId: "rakesh_jhunjhunwala", name: "Rakesh Jhunjhunwala", category: "persona", description: "India's Big Bull. Emerging markets, macro growth stories.", tradingPhilosophy: "Be bullish on growth economies. Ride secular trends with conviction.", avatarEmoji: "🐘", riskTolerance: "high", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 12, agentId: "mohnish_pabrai", name: "Mohnish Pabrai", category: "persona", description: "Dhandho approach. Heads I win, tails I don't lose much.", tradingPhilosophy: "Few bets, big bets, infrequent bets. Low risk, high uncertainty.", avatarEmoji: "🎲", riskTolerance: "low", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 13, agentId: "fundamentals_analyst", name: "Fundamentals Analyst", category: "specialist", description: "Profitability, growth, financial health, and valuation ratios.", tradingPhilosophy: "Numbers tell the truth. Analyze financials to find quality.", avatarEmoji: "📈", riskTolerance: "medium", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 14, agentId: "technical_analyst", name: "Technical Analyst", category: "specialist", description: "Trend following, mean reversion, momentum, volatility.", tradingPhilosophy: "Price action contains all information. Follow the charts.", avatarEmoji: "📉", riskTolerance: "medium", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 15, agentId: "sentiment_analyst", name: "Sentiment Analyst", category: "specialist", description: "Insider trades + news sentiment analysis.", tradingPhilosophy: "Follow the smart money and market sentiment.", avatarEmoji: "🧠", riskTolerance: "medium", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 16, agentId: "news_sentiment_analyst", name: "News Sentiment", category: "specialist", description: "LLM-classified news headlines for sentiment signals.", tradingPhilosophy: "News moves markets. Classify and act on headlines faster than humans.", avatarEmoji: "📰", riskTolerance: "medium", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 17, agentId: "valuation_analyst", name: "Valuation Analyst", category: "specialist", description: "DCF, owner earnings, EV/EBITDA, residual income models.", tradingPhilosophy: "Every asset has a fair value. Find the gap between price and value.", avatarEmoji: "💰", riskTolerance: "low", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 18, agentId: "growth_agent", name: "Growth Analyst", category: "specialist", description: "Growth trends, margin expansion, insider conviction analysis.", tradingPhilosophy: "Growth is the ultimate driver. Find companies accelerating their growth.", avatarEmoji: "🌱", riskTolerance: "medium", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 19, agentId: "risk_manager", name: "Risk Manager", category: "management", description: "Volatility-adjusted position sizing, correlation analysis.", tradingPhilosophy: "Risk comes first. Size positions by volatility, not conviction.", avatarEmoji: "🛡️", riskTolerance: "low", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+    { id: 20, agentId: "portfolio_manager", name: "Portfolio Manager", category: "management", description: "Final trading decisions. Synthesizes all analyst signals.", tradingPhilosophy: "The buck stops here. Weigh all signals and make the final call.", avatarEmoji: "👔", riskTolerance: "medium", assetFocus: "both", winRate: 0, totalSignals: 0, avgConfidence: 0 },
+  ];
+
+  // === MEME → HF AGENT MAPPING ===
+  const memeAgentMappingSeed: MemeAgentMapping[] = [
+    { id: 1, memeAgentType: "bull", hedgeFundAgentId: "cathie_wood", weight: 0.4 },
+    { id: 2, memeAgentType: "bull", hedgeFundAgentId: "stanley_druckenmiller", weight: 0.35 },
+    { id: 3, memeAgentType: "bull", hedgeFundAgentId: "growth_agent", weight: 0.25 },
+    { id: 4, memeAgentType: "bear", hedgeFundAgentId: "michael_burry", weight: 0.5 },
+    { id: 5, memeAgentType: "bear", hedgeFundAgentId: "ben_graham", weight: 0.3 },
+    { id: 6, memeAgentType: "bear", hedgeFundAgentId: "risk_manager", weight: 0.2 },
+    { id: 7, memeAgentType: "algo", hedgeFundAgentId: "technical_analyst", weight: 0.35 },
+    { id: 8, memeAgentType: "algo", hedgeFundAgentId: "fundamentals_analyst", weight: 0.30 },
+    { id: 9, memeAgentType: "algo", hedgeFundAgentId: "valuation_analyst", weight: 0.20 },
+    { id: 10, memeAgentType: "algo", hedgeFundAgentId: "sentiment_analyst", weight: 0.15 },
+    { id: 11, memeAgentType: "moon", hedgeFundAgentId: "stanley_druckenmiller", weight: 0.35 },
+    { id: 12, memeAgentType: "moon", hedgeFundAgentId: "cathie_wood", weight: 0.35 },
+    { id: 13, memeAgentType: "moon", hedgeFundAgentId: "rakesh_jhunjhunwala", weight: 0.3 },
+    { id: 14, memeAgentType: "zen", hedgeFundAgentId: "warren_buffett", weight: 0.35 },
+    { id: 15, memeAgentType: "zen", hedgeFundAgentId: "ben_graham", weight: 0.25 },
+    { id: 16, memeAgentType: "zen", hedgeFundAgentId: "charlie_munger", weight: 0.25 },
+    { id: 17, memeAgentType: "zen", hedgeFundAgentId: "mohnish_pabrai", weight: 0.15 },
+    { id: 18, memeAgentType: "degen", hedgeFundAgentId: "bill_ackman", weight: 0.3 },
+    { id: 19, memeAgentType: "degen", hedgeFundAgentId: "peter_lynch", weight: 0.25 },
+    { id: 20, memeAgentType: "degen", hedgeFundAgentId: "phil_fisher", weight: 0.2 },
+    { id: 21, memeAgentType: "degen", hedgeFundAgentId: "news_sentiment_analyst", weight: 0.25 },
+  ];
+
+  // === SIGNAL GENERATION ===
+  const cryptoTickers = ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "AVAX", "DOT", "LINK"];
+  const equityTickers = ["AAPL", "GOOGL", "MSFT", "NVDA", "TSLA"];
+  const allTickers = [...cryptoTickers, ...equityTickers];
+
+  const basePrices: Record<string, number> = {
+    BTC: 87420, ETH: 3180, SOL: 148, BNB: 580, XRP: 0.62, ADA: 0.45, DOGE: 0.165, AVAX: 36, DOT: 7.5, LINK: 15.2,
+    AAPL: 178, GOOGL: 142, MSFT: 415, NVDA: 880, TSLA: 175,
+  };
+
+  // Agent-specific signal biases
+  const bullishSkew = new Set(["cathie_wood", "stanley_druckenmiller", "rakesh_jhunjhunwala", "growth_agent"]);
+  const bearishSkew = new Set(["michael_burry", "ben_graham"]);
+  const cautiousSkew = new Set(["warren_buffett", "charlie_munger", "mohnish_pabrai"]);
+
+  // Agent-specific reasoning templates
+  const reasoningTemplates: Record<string, (ticker: string, signal: string) => string> = {
+    warren_buffett: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "shows strong economic moat and durable competitive advantage" : s === "bearish" ? "is trading above intrinsic value with deteriorating moat" : "is fairly valued but lacks sufficient margin of safety"}`, factors: ["Intrinsic value analysis", "Economic moat assessment", "Management quality"] }),
+    charlie_munger: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "represents a quality business at a reasonable price" : s === "bearish" ? "fails the quality filter — poor unit economics" : "needs more time to develop a clear thesis"}`, factors: ["Business quality", "Rational framework", "Multi-disciplinary analysis"] }),
+    ben_graham: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "is trading below net asset value with margin of safety" : s === "bearish" ? "is dangerously overvalued relative to book value" : "is near fair value with insufficient margin of safety"}`, factors: ["Book value ratio", "Margin of safety", "Net-net analysis"] }),
+    peter_lynch: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "has strong growth potential that the market is underpricing" : s === "bearish" ? "growth story is fully priced in, avoid" : "is a hold — growth is moderate"}`, factors: ["PEG ratio", "Growth trajectory", "Consumer insight"] }),
+    phil_fisher: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "has exceptional management and strong R&D pipeline" : s === "bearish" ? "management quality declining, R&D spend inefficient" : "management is decent but not exceptional"}`, factors: ["Scuttlebutt research", "Management quality", "R&D efficiency"] }),
+    cathie_wood: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "is at the forefront of disruptive innovation — massive upside" : s === "bearish" ? "disruption thesis weakening, losing competitive edge" : "innovation narrative intact but needs more catalysts"}`, factors: ["Disruption potential", "5-year TAM", "Innovation curve"] }),
+    stanley_druckenmiller: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "macro tailwinds are strong — riding this trend with size" : s === "bearish" ? "macro headwinds intensifying, reducing exposure" : "macro picture is mixed, staying small"}`, factors: ["Macro trends", "Liquidity cycles", "Positioning data"] }),
+    michael_burry: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "is actually undervalued if you look at the forensic data" : s === "bearish" ? "screams bubble. Overvalued by every contrarian metric" : "isn't interesting enough to short or buy"}`, factors: ["Forensic accounting", "Contrarian indicators", "Bubble metrics"] }),
+    bill_ackman: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "has hidden value that activist pressure can unlock" : s === "bearish" ? "management is destroying value — needs activist intervention" : "current valuation is fair, no activist angle"}`, factors: ["Activist potential", "Value unlock", "Corporate governance"] }),
+    aswath_damodaran: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "DCF model shows 20%+ upside from current price" : s === "bearish" ? "DCF model shows significant overvaluation" : "is trading within 5% of fair value per DCF"}`, factors: ["DCF analysis", "Risk premium", "Growth rate modeling"] }),
+    rakesh_jhunjhunwala: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "is riding a secular growth wave — be aggressive" : s === "bearish" ? "growth momentum stalling, cycle turning" : "waiting for better entry on the next pullback"}`, factors: ["Secular trends", "Growth momentum", "Emerging market dynamics"] }),
+    mohnish_pabrai: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "is a Dhandho bet — heads I win big, tails I don't lose much" : s === "bearish" ? "risk/reward is unfavorable — tails I lose a lot" : "not enough asymmetry for a position"}`, factors: ["Risk/reward asymmetry", "Dhandho framework", "Downside protection"] }),
+    fundamentals_analyst: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "fundamentals are strong: margins expanding, revenue accelerating" : s === "bearish" ? "deteriorating fundamentals: margin compression, slowing growth" : "fundamentals are stable but not compelling"}`, factors: ["Revenue growth", "Profit margins", "Balance sheet health"] }),
+    technical_analyst: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "breaking out above key resistance with strong volume" : s === "bearish" ? "breaking below support with increasing selling pressure" : "consolidating in a range, no clear directional signal"}`, factors: ["Price action", "Volume analysis", "Moving averages"] }),
+    sentiment_analyst: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "smart money is accumulating, insider buying elevated" : s === "bearish" ? "institutional selling pressure, insider dumping detected" : "mixed signals from smart money flow"}`, factors: ["Insider activity", "Institutional flow", "Sentiment index"] }),
+    news_sentiment_analyst: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "positive news cycle: upgrades, partnerships, strong earnings" : s === "bearish" ? "negative news cycle: downgrades, regulatory concerns" : "news flow is neutral, no strong catalysts"}`, factors: ["News sentiment score", "Headline analysis", "Event catalysts"] }),
+    valuation_analyst: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "undervalued by 15-25% across multiple valuation frameworks" : s === "bearish" ? "overvalued by 20%+ on DCF, EV/EBITDA, and residual income" : "fairly valued within normal valuation ranges"}`, factors: ["DCF model", "EV/EBITDA", "Residual income"] }),
+    growth_agent: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "growth acceleration detected: revenue growth rate increasing QoQ" : s === "bearish" ? "growth deceleration: sequential decline in key metrics" : "growth rate stable but not accelerating"}`, factors: ["Growth rate trend", "Margin expansion", "TAM penetration"] }),
+    risk_manager: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "risk-adjusted return is attractive: low vol, high Sharpe" : s === "bearish" ? "risk metrics deteriorating: rising vol, correlation spike" : "risk metrics are neutral, position sizing standard"}`, factors: ["Volatility analysis", "Correlation risk", "Position sizing"] }),
+    portfolio_manager: (t, s) => JSON.stringify({ summary: `${t} ${s === "bullish" ? "consensus among analysts is bullish — adding to portfolio" : s === "bearish" ? "multiple analysts flagging risk — reducing exposure" : "mixed analyst signals — maintaining current position"}`, factors: ["Analyst consensus", "Portfolio fit", "Risk allocation"] }),
+  };
+
+  // Time horizon by agent type
+  const agentTimeHorizon: Record<string, string> = {
+    warren_buffett: "long", charlie_munger: "long", ben_graham: "long", mohnish_pabrai: "long",
+    peter_lynch: "medium", phil_fisher: "long", cathie_wood: "long",
+    stanley_druckenmiller: "medium", michael_burry: "medium", bill_ackman: "medium",
+    aswath_damodaran: "medium", rakesh_jhunjhunwala: "medium",
+    fundamentals_analyst: "medium", technical_analyst: "short", sentiment_analyst: "short",
+    news_sentiment_analyst: "short", valuation_analyst: "medium", growth_agent: "medium",
+    risk_manager: "short", portfolio_manager: "medium",
+  };
+
+  const signalsSeed: AgentSignal[] = [];
+  let signalId = 1;
+
+  for (const hfAgent of hedgeFundAgentsSeed) {
+    // Determine which tickers this agent covers
+    const tickers = hfAgent.assetFocus === "equity" ? equityTickers : allTickers;
+    // Pick a subset of tickers per agent (5-10)
+    const agentTickers = [...tickers].sort(() => Math.random() - 0.5).slice(0, Math.min(tickers.length, 5 + Math.floor(Math.random() * 6)));
+
+    let totalConf = 0;
+    let correctCount = 0;
+    let totalCount = 0;
+
+    for (const ticker of agentTickers) {
+      // 2-4 signals per ticker over past 7 days
+      const numSignals = 2 + Math.floor(Math.random() * 3);
+      for (let s = 0; s < numSignals; s++) {
+        // Determine signal with agent bias
+        const roll = Math.random();
+        let signal: string;
+        if (bullishSkew.has(hfAgent.agentId)) {
+          signal = roll < 0.60 ? "bullish" : roll < 0.80 ? "neutral" : "bearish";
+        } else if (bearishSkew.has(hfAgent.agentId)) {
+          signal = roll < 0.50 ? "bearish" : roll < 0.75 ? "neutral" : "bullish";
+        } else if (cautiousSkew.has(hfAgent.agentId)) {
+          signal = roll < 0.30 ? "bullish" : roll < 0.70 ? "neutral" : "bearish";
+        } else {
+          signal = roll < 0.35 ? "bullish" : roll < 0.65 ? "neutral" : "bearish";
+        }
+
+        const confidence = 40 + Math.floor(Math.random() * 56); // 40-95
+        const base = basePrices[ticker] || 100;
+        const pctMove = (signal === "bullish" ? 1 : signal === "bearish" ? -1 : 0) * (5 + Math.random() * 20) / 100;
+        const targetPrice = Math.round(base * (1 + pctMove) * 100) / 100;
+
+        const hoursAgo = Math.floor(Math.random() * 7 * 24);
+        const createdAt = new Date(now.getTime() - hoursAgo * 3600000).toISOString();
+
+        const reasoningFn = reasoningTemplates[hfAgent.agentId];
+        const reasoning = reasoningFn ? reasoningFn(ticker, signal) : JSON.stringify({ summary: `${signal} on ${ticker}`, factors: [] });
+
+        // Randomly resolve some signals (older ones more likely)
+        let isCorrect: boolean | null = null;
+        if (hoursAgo > 48) {
+          isCorrect = Math.random() < 0.58; // ~58% correct overall
+        }
+
+        totalConf += confidence;
+        totalCount++;
+        if (isCorrect === true) correctCount++;
+
+        signalsSeed.push({
+          id: signalId++,
+          hedgeFundAgentId: hfAgent.agentId,
+          ticker,
+          signal,
+          confidence,
+          reasoning,
+          targetPrice,
+          timeHorizon: agentTimeHorizon[hfAgent.agentId] || "medium",
+          createdAt,
+          isCorrect,
+        });
+      }
+    }
+
+    // Update agent stats
+    const resolvedSignals = signalsSeed.filter(s => s.hedgeFundAgentId === hfAgent.agentId && s.isCorrect !== null);
+    const wins = resolvedSignals.filter(s => s.isCorrect === true).length;
+    hfAgent.winRate = resolvedSignals.length > 0 ? Math.round((wins / resolvedSignals.length) * 100) : 0;
+    hfAgent.totalSignals = totalCount;
+    hfAgent.avgConfidence = totalCount > 0 ? Math.round(totalConf / totalCount) : 0;
+  }
+
+  return { agents, users, competition, portfolios, positions, trades, snapshots, leaderboard, userAchievements, agentMessagesData, achievementDefs, stakesData, rewardsData, hedgeFundAgentsSeed, memeAgentMappingSeed, signalsSeed };
 }
 
 export class MemStorage implements IStorage {
@@ -474,6 +670,10 @@ export class MemStorage implements IStorage {
   private agentMessages: AgentMessage[] = [];
   private stakes: Stake[] = [];
   private stakingRewards: StakingReward[] = [];
+  private hedgeFundAgentsMap: Map<string, HedgeFundAgent> = new Map();
+  private agentSignalsData: AgentSignal[] = [];
+  private memeAgentMappings: MemeAgentMapping[] = [];
+  private hfAgentStakes: { stakerId: number; hedgeFundAgentId: string; amount: number; stakedAt: string }[] = [];
 
   private nextTradeId = 100;
   private nextPositionId = 100;
@@ -511,6 +711,11 @@ export class MemStorage implements IStorage {
     this.agentMessages = seed.agentMessagesData;
     this.stakes = seed.stakesData;
     this.stakingRewards = seed.rewardsData;
+
+    // Hedge fund agents
+    seed.hedgeFundAgentsSeed.forEach(a => this.hedgeFundAgentsMap.set(a.agentId, a));
+    this.agentSignalsData = seed.signalsSeed;
+    this.memeAgentMappings = seed.memeAgentMappingSeed;
   }
 
   getUser(id: number): User | undefined {
@@ -686,6 +891,118 @@ export class MemStorage implements IStorage {
     return Array.from(map.entries())
       .map(([targetUserId, data]) => ({ targetUserId, totalStaked: data.totalStaked, stakerCount: data.stakers.size }))
       .sort((a, b) => b.totalStaked - a.totalStaked);
+  }
+
+  // === Hedge Fund Agents ===
+
+  getHedgeFundAgent(agentId: string): HedgeFundAgent | undefined {
+    return this.hedgeFundAgentsMap.get(agentId);
+  }
+
+  getAllHedgeFundAgents(): HedgeFundAgent[] {
+    return Array.from(this.hedgeFundAgentsMap.values());
+  }
+
+  getHedgeFundAgentsByCategory(category: string): HedgeFundAgent[] {
+    return this.getAllHedgeFundAgents().filter(a => a.category === category);
+  }
+
+  // === Agent Signals ===
+
+  getSignalsByAgent(agentId: string, limit?: number): AgentSignal[] {
+    const signals = this.agentSignalsData
+      .filter(s => s.hedgeFundAgentId === agentId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return limit ? signals.slice(0, limit) : signals;
+  }
+
+  getSignalsByTicker(ticker: string, limit?: number): AgentSignal[] {
+    const signals = this.agentSignalsData
+      .filter(s => s.ticker === ticker)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return limit ? signals.slice(0, limit) : signals;
+  }
+
+  getLatestSignals(limit?: number): AgentSignal[] {
+    const sorted = [...this.agentSignalsData].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return limit ? sorted.slice(0, limit) : sorted;
+  }
+
+  getLatestSignalByAgent(agentId: string, ticker?: string): AgentSignal | undefined {
+    const signals = this.agentSignalsData
+      .filter(s => s.hedgeFundAgentId === agentId && (!ticker || s.ticker === ticker))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return signals[0];
+  }
+
+  getAgentSignalStats(agentId: string): { winRate: number; totalSignals: number; avgConfidence: number } {
+    const agent = this.hedgeFundAgentsMap.get(agentId);
+    if (!agent) return { winRate: 0, totalSignals: 0, avgConfidence: 0 };
+    return { winRate: agent.winRate, totalSignals: agent.totalSignals, avgConfidence: agent.avgConfidence };
+  }
+
+  // === Meme ↔ HF Mapping ===
+
+  getMemeAgentMapping(memeAgentType: string): MemeAgentMapping[] {
+    return this.memeAgentMappings.filter(m => m.memeAgentType === memeAgentType);
+  }
+
+  getCompositeSignal(memeAgentType: string, ticker: string): { signal: string; confidence: number; contributors: any[] } | undefined {
+    const mappings = this.getMemeAgentMapping(memeAgentType);
+    if (mappings.length === 0) return undefined;
+
+    let bullishScore = 0;
+    let bearishScore = 0;
+    let neutralScore = 0;
+    let totalWeight = 0;
+    const contributors: any[] = [];
+
+    for (const mapping of mappings) {
+      const latest = this.getLatestSignalByAgent(mapping.hedgeFundAgentId, ticker);
+      const agent = this.hedgeFundAgentsMap.get(mapping.hedgeFundAgentId);
+      if (!latest || !agent) continue;
+
+      const weight = mapping.weight;
+      totalWeight += weight;
+
+      if (latest.signal === "bullish") bullishScore += weight;
+      else if (latest.signal === "bearish") bearishScore += weight;
+      else neutralScore += weight;
+
+      contributors.push({
+        agentId: agent.agentId,
+        name: agent.name,
+        emoji: agent.avatarEmoji,
+        signal: latest.signal,
+        confidence: latest.confidence,
+        weight: mapping.weight,
+      });
+    }
+
+    if (totalWeight === 0) return undefined;
+
+    const signal = bullishScore > bearishScore && bullishScore > neutralScore ? "bullish"
+      : bearishScore > bullishScore && bearishScore > neutralScore ? "bearish"
+      : "neutral";
+
+    const avgConf = contributors.reduce((sum, c) => sum + c.confidence * c.weight, 0) / totalWeight;
+
+    return { signal, confidence: Math.round(avgConf), contributors };
+  }
+
+  // === HF Agent Staking ===
+
+  getHfAgentStakes(stakerId: number): { hedgeFundAgentId: string; amount: number; stakedAt: string }[] {
+    return this.hfAgentStakes.filter(s => s.stakerId === stakerId);
+  }
+
+  addHfAgentStake(stakerId: number, hedgeFundAgentId: string, amount: number): void {
+    const existing = this.hfAgentStakes.find(s => s.stakerId === stakerId && s.hedgeFundAgentId === hedgeFundAgentId);
+    if (existing) {
+      existing.amount += amount;
+    } else {
+      this.hfAgentStakes.push({ stakerId, hedgeFundAgentId, amount, stakedAt: new Date().toISOString() });
+    }
   }
 }
 
