@@ -186,7 +186,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const stakes = storage.getStakesByStaker(DEMO_USER_ID);
     const enriched = stakes.map(s => {
       const targetUser = storage.getUser(s.targetUserId);
-      const agent = targetUser ? storage.getAgent(targetUser.selectedAgentType) : undefined;
+      // Dual-lookup: meme agent then HF agent
+      const memeAgent = targetUser ? storage.getAgent(targetUser.selectedAgentType) : undefined;
+      const hfAgent = targetUser && !memeAgent ? storage.getHedgeFundAgent(targetUser.selectedAgentType) : undefined;
+      const agent = memeAgent || hfAgent;
       const leaderboardEntry = storage.getLeaderboardEntry(s.targetUserId);
       return { ...s, targetUser, agent, leaderboardEntry };
     });
@@ -198,7 +201,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const leaderboard = storage.getStakingLeaderboard();
     const enriched = leaderboard.map(entry => {
       const user = storage.getUser(entry.targetUserId);
-      const agent = user ? storage.getAgent(user.selectedAgentType) : undefined;
+      // Dual-lookup: meme agent then HF agent
+      const memeAgent = user ? storage.getAgent(user.selectedAgentType) : undefined;
+      const hfAgent = user && !memeAgent ? storage.getHedgeFundAgent(user.selectedAgentType) : undefined;
+      const agent = memeAgent || hfAgent;
       const lb = storage.getLeaderboardEntry(entry.targetUserId);
       return { ...entry, user, agent, leaderboardEntry: lb };
     });
@@ -212,7 +218,10 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     const stakesOnTarget = storage.getStakesByTarget(userId);
     const myStake = storage.getStake(DEMO_USER_ID, userId);
     const user = storage.getUser(userId);
-    const agent = user ? storage.getAgent(user.selectedAgentType) : undefined;
+    // Dual-lookup: meme agent then HF agent
+    const memeAgent = user ? storage.getAgent(user.selectedAgentType) : undefined;
+    const hfAgent = user && !memeAgent ? storage.getHedgeFundAgent(user.selectedAgentType) : undefined;
+    const agent = memeAgent || hfAgent;
     const leaderboardEntry = storage.getLeaderboardEntry(userId);
     res.json({
       totalStaked,
@@ -319,10 +328,14 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (!user) return res.status(404).json({ message: "User not found" });
 
     const leaderboardEntry = storage.getLeaderboardEntry(userId);
-    const agent = storage.getAgent(user.selectedAgentType);
+    // Dual-lookup: meme agent then HF agent
+    const memeAgent = storage.getAgent(user.selectedAgentType);
+    const hfAgent = !memeAgent ? storage.getHedgeFundAgent(user.selectedAgentType) : null;
+    const agent = memeAgent || hfAgent;
+    const agentTier = memeAgent ? "meme" : hfAgent ? "hedge_fund" : "meme";
     const achievements = storage.getUserAchievements(userId);
 
-    res.json({ user, leaderboardEntry, agent, achievements });
+    res.json({ user, leaderboardEntry, agent, agentTier, achievements });
   });
 
   // === HEDGE FUND AGENTS ===

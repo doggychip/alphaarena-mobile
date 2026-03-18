@@ -105,21 +105,40 @@ function generateSeedData() {
     { id: 6, type: "degen", name: "Degen Dave", personality: "Degen 🎰", tradingStyle: "High Risk/Meme", avatarEmoji: "🎰", description: "YOLO. Full port into SOL.", riskLevel: 5 },
   ];
 
-  // Usernames for seed
-  const usernames = [
-    "CryptoKing", "SolanaMaxi", "DiamondHands42", "ApeTrader", "LunarDegen",
-    "WhaleWatcher", "PumpItUp", "BearSlayer", "TokenHunter", "MoonShot99",
-    "AlphaSeeker", "DipBuyer", "GigaBrain", "RetailAndy", "DeFiDegen",
-    "YieldFarmer", "NFTFlip", "ShortSqueeze", "GasOptimizer", "MEVBot",
-    "RugSurvivor", "LiquidityKing", "StakeNBake", "BridgeRunner", "L2Maxi",
-    "ZKProver", "ChainHopper", "FlashLoan", "OracleReader", "VaultManager",
-    "ProtocolPirate", "GovernanceGuru"
+  // 25 Agent users — each represents a real agent competing in the Arena
+  const agentUserDefs: { id: number; username: string; selectedAgentType: string; level: number; streak: number; tier: "meme" | "hf" }[] = [
+    // 6 Meme agents (ids 2-7)
+    { id: 2,  username: "Bull Run Barry",         selectedAgentType: "bull",   level: 15, streak: 8,  tier: "meme" },
+    { id: 3,  username: "Bear Market Betty",      selectedAgentType: "bear",   level: 14, streak: 12, tier: "meme" },
+    { id: 4,  username: "Algo Andy",              selectedAgentType: "algo",   level: 18, streak: 15, tier: "meme" },
+    { id: 5,  username: "Moon Boy Mike",           selectedAgentType: "moon",   level: 10, streak: 3,  tier: "meme" },
+    { id: 6,  username: "Zen Master Zara",         selectedAgentType: "zen",    level: 17, streak: 20, tier: "meme" },
+    { id: 7,  username: "Degen Dave",              selectedAgentType: "degen",  level: 8,  streak: 2,  tier: "meme" },
+    // 19 HF agents (ids 8-26) — no portfolio_manager
+    { id: 8,  username: "Warren Buffett",          selectedAgentType: "warren_buffett",          level: 25, streak: 30, tier: "hf" },
+    { id: 9,  username: "Charlie Munger",          selectedAgentType: "charlie_munger",          level: 24, streak: 28, tier: "hf" },
+    { id: 10, username: "Ben Graham",              selectedAgentType: "ben_graham",              level: 25, streak: 35, tier: "hf" },
+    { id: 11, username: "Peter Lynch",             selectedAgentType: "peter_lynch",             level: 22, streak: 22, tier: "hf" },
+    { id: 12, username: "Phil Fisher",             selectedAgentType: "phil_fisher",             level: 20, streak: 18, tier: "hf" },
+    { id: 13, username: "Cathie Wood",             selectedAgentType: "cathie_wood",             level: 18, streak: 8,  tier: "hf" },
+    { id: 14, username: "Stanley Druckenmiller",   selectedAgentType: "stanley_druckenmiller",   level: 23, streak: 25, tier: "hf" },
+    { id: 15, username: "Michael Burry",           selectedAgentType: "michael_burry",           level: 19, streak: 5,  tier: "hf" },
+    { id: 16, username: "Bill Ackman",             selectedAgentType: "bill_ackman",             level: 17, streak: 10, tier: "hf" },
+    { id: 17, username: "Aswath Damodaran",        selectedAgentType: "aswath_damodaran",        level: 21, streak: 20, tier: "hf" },
+    { id: 18, username: "Rakesh Jhunjhunwala",     selectedAgentType: "rakesh_jhunjhunwala",     level: 19, streak: 15, tier: "hf" },
+    { id: 19, username: "Mohnish Pabrai",          selectedAgentType: "mohnish_pabrai",          level: 18, streak: 22, tier: "hf" },
+    { id: 20, username: "Fundamentals Analyst",    selectedAgentType: "fundamentals_analyst",    level: 15, streak: 14, tier: "hf" },
+    { id: 21, username: "Technical Analyst",       selectedAgentType: "technical_analyst",       level: 16, streak: 16, tier: "hf" },
+    { id: 22, username: "Sentiment Analyst",       selectedAgentType: "sentiment_analyst",       level: 14, streak: 12, tier: "hf" },
+    { id: 23, username: "News Sentiment",          selectedAgentType: "news_sentiment_analyst",  level: 13, streak: 10, tier: "hf" },
+    { id: 24, username: "Valuation Analyst",       selectedAgentType: "valuation_analyst",       level: 15, streak: 18, tier: "hf" },
+    { id: 25, username: "Growth Analyst",          selectedAgentType: "growth_agent",            level: 12, streak: 11, tier: "hf" },
+    { id: 26, username: "Risk Manager",            selectedAgentType: "risk_manager",            level: 20, streak: 25, tier: "hf" },
   ];
 
-  const agentTypes = ["bull", "bear", "algo", "moon", "zen", "degen"];
   const now = new Date();
 
-  // Demo user + 32 others
+  // Demo user + 25 agent users = 26 total
   const users: User[] = [
     {
       id: 1, username: "DegenRyan", email: "ryan@alpha.gg",
@@ -129,20 +148,19 @@ function generateSeedData() {
     },
   ];
 
-  for (let i = 0; i < 32; i++) {
-    const level = Math.floor(Math.random() * 25) + 1;
+  for (const def of agentUserDefs) {
     users.push({
-      id: i + 2,
-      username: usernames[i] || `User${i}`,
-      email: `${usernames[i]?.toLowerCase() || `user${i}`}@alpha.gg`,
+      id: def.id,
+      username: def.username,
+      email: `${def.selectedAgentType}@alpha.gg`,
       avatarUrl: null,
-      level,
-      xp: level * 200 + Math.floor(Math.random() * 400),
-      credits: 500 + Math.floor(Math.random() * 4500),
-      streak: Math.floor(Math.random() * 20),
-      longestStreak: Math.floor(Math.random() * 30) + 1,
-      lastTradeDate: new Date(now.getTime() - Math.floor(Math.random() * 3) * 86400000).toISOString().split("T")[0],
-      selectedAgentType: agentTypes[Math.floor(Math.random() * 6)],
+      level: def.level,
+      xp: def.level * 200 + Math.floor(Math.random() * 400),
+      credits: 1000 + Math.floor(Math.random() * 4000),
+      streak: def.streak,
+      longestStreak: def.streak + Math.floor(Math.random() * 10),
+      lastTradeDate: new Date(now.getTime() - Math.floor(Math.random() * 2) * 86400000).toISOString().split("T")[0],
+      selectedAgentType: def.selectedAgentType,
       createdAt: new Date(now.getTime() - (30 + Math.floor(Math.random() * 60)) * 86400000).toISOString(),
     });
   }
@@ -203,12 +221,47 @@ function generateSeedData() {
     });
   }
 
+  // Personality-consistent leaderboard stats for each agent
+  const agentPerformance: Record<string, { totalReturn: number; sharpe: number; maxDrawdown: number; winRate: number }> = {
+    // Top performers
+    "cathie_wood":             { totalReturn: 35,  sharpe: 1.5, maxDrawdown: 18, winRate: 55 },
+    "stanley_druckenmiller":   { totalReturn: 28,  sharpe: 2.5, maxDrawdown: 8,  winRate: 65 },
+    "peter_lynch":             { totalReturn: 22,  sharpe: 2.2, maxDrawdown: 7,  winRate: 70 },
+    "moon":                    { totalReturn: 40,  sharpe: 1.0, maxDrawdown: 22, winRate: 45 },
+    "technical_analyst":       { totalReturn: 18,  sharpe: 2.8, maxDrawdown: 5,  winRate: 72 },
+    // Mid-pack
+    "warren_buffett":          { totalReturn: 12,  sharpe: 2.5, maxDrawdown: 4,  winRate: 75 },
+    "charlie_munger":          { totalReturn: 11,  sharpe: 2.4, maxDrawdown: 4,  winRate: 73 },
+    "ben_graham":              { totalReturn: 8,   sharpe: 2.7, maxDrawdown: 3,  winRate: 78 },
+    "zen":                     { totalReturn: 10,  sharpe: 2.3, maxDrawdown: 5,  winRate: 68 },
+    "algo":                    { totalReturn: 15,  sharpe: 2.6, maxDrawdown: 6,  winRate: 70 },
+    "mohnish_pabrai":          { totalReturn: 14,  sharpe: 2.0, maxDrawdown: 7,  winRate: 65 },
+    "fundamentals_analyst":    { totalReturn: 13,  sharpe: 2.1, maxDrawdown: 6,  winRate: 67 },
+    "valuation_analyst":       { totalReturn: 9,   sharpe: 2.5, maxDrawdown: 4,  winRate: 72 },
+    "aswath_damodaran":        { totalReturn: 10,  sharpe: 2.3, maxDrawdown: 5,  winRate: 70 },
+    "phil_fisher":             { totalReturn: 11,  sharpe: 2.0, maxDrawdown: 6,  winRate: 66 },
+    "sentiment_analyst":       { totalReturn: 12,  sharpe: 1.9, maxDrawdown: 8,  winRate: 62 },
+    "news_sentiment_analyst":  { totalReturn: 10,  sharpe: 1.7, maxDrawdown: 9,  winRate: 60 },
+    "growth_agent":            { totalReturn: 16,  sharpe: 1.8, maxDrawdown: 10, winRate: 60 },
+    "risk_manager":            { totalReturn: 7,   sharpe: 3.0, maxDrawdown: 2,  winRate: 74 },
+    // Lower pack
+    "michael_burry":           { totalReturn: -5,  sharpe: 0.5, maxDrawdown: 15, winRate: 40 },
+    "bull":                    { totalReturn: 25,  sharpe: 1.5, maxDrawdown: 14, winRate: 50 },
+    "bear":                    { totalReturn: -2,  sharpe: 0.8, maxDrawdown: 10, winRate: 45 },
+    "degen":                   { totalReturn: 30,  sharpe: 0.7, maxDrawdown: 25, winRate: 35 },
+    "bill_ackman":             { totalReturn: 5,   sharpe: 1.2, maxDrawdown: 12, winRate: 50 },
+    "rakesh_jhunjhunwala":     { totalReturn: 20,  sharpe: 1.8, maxDrawdown: 11, winRate: 60 },
+  };
+
   // Leaderboard entries for all users, sorted by compositeScore
   const leaderboardUnsorted: Omit<LeaderboardEntry, "rank">[] = users.map(u => {
-    const totalReturn = Math.round((Math.random() - 0.3) * 40 * 100) / 100;
-    const sharpe = Math.round((Math.random() * 3) * 100) / 100;
-    const maxDrawdown = Math.round(Math.random() * 20 * 100) / 100;
-    const winRate = Math.round((40 + Math.random() * 35) * 100) / 100;
+    const perf = agentPerformance[u.selectedAgentType];
+    // Add slight randomness so it's not perfectly deterministic
+    const jitter = () => Math.round((Math.random() - 0.5) * 200) / 100; // +-1
+    const totalReturn = perf ? Math.round((perf.totalReturn + jitter()) * 100) / 100 : Math.round((Math.random() - 0.3) * 20 * 100) / 100;
+    const sharpe = perf ? Math.round((perf.sharpe + jitter() * 0.1) * 100) / 100 : Math.round(Math.random() * 2 * 100) / 100;
+    const maxDrawdown = perf ? Math.round(Math.max(0, perf.maxDrawdown + jitter()) * 100) / 100 : Math.round(Math.random() * 15 * 100) / 100;
+    const winRate = perf ? Math.round((perf.winRate + jitter()) * 100) / 100 : Math.round((45 + Math.random() * 30) * 100) / 100;
     const compositeScore = Math.round((totalReturn * 0.4 + sharpe * 10 + (100 - maxDrawdown) * 0.1 + winRate * 0.2) * 100) / 100;
     return {
       id: u.id, competitionId: 1, userId: u.id,
@@ -236,9 +289,9 @@ function generateSeedData() {
     { id: 4, userId: 1, achievementType: "diversified", unlockedAt: new Date(now.getTime() - 1 * 86400000).toISOString() },
   ];
 
-  // Add some achievements for other users
+  // Add some achievements for agent users
   let achId = 5;
-  for (let i = 2; i <= 33; i++) {
+  for (let i = 2; i <= 26; i++) {
     const numAch = Math.floor(Math.random() * 4) + 1;
     for (let j = 0; j < numAch; j++) {
       const achType = achievementDefs[Math.floor(Math.random() * achievementDefs.length)];
@@ -714,8 +767,8 @@ function generateSeedData() {
     });
   }
 
-  // Other users stake on various agents (~60 total stakes)
-  for (let i = 2; i <= 33; i++) {
+  // Agent users stake on various agents
+  for (let i = 2; i <= 26; i++) {
     // Each user stakes on 1-3 agents
     const numStakes = Math.floor(Math.random() * 3) + 1;
     const targets = [...topAgentUserIds].sort(() => Math.random() - 0.5).slice(0, numStakes);
@@ -1061,7 +1114,20 @@ export class MemStorage implements IStorage {
       .sort((a, b) => a.rank - b.rank)
       .map(entry => {
         const user = this.users.get(entry.userId)!;
-        const agent = this.agents.get(user?.selectedAgentType || "bull")!;
+        // Dual-lookup: try meme agents first, then HF agents
+        const memeAgent = this.agents.get(user?.selectedAgentType || "bull");
+        const agent: Agent = memeAgent || (() => {
+          const hf = this.hedgeFundAgentsMap.get(user?.selectedAgentType || "");
+          if (!hf) return undefined as any;
+          return {
+            id: hf.id, type: hf.agentId, name: hf.name,
+            avatarEmoji: hf.avatarEmoji,
+            personality: hf.category,
+            tradingStyle: hf.tradingPhilosophy.split('.')[0],
+            description: hf.description,
+            riskLevel: hf.riskTolerance === 'high' ? 4 : hf.riskTolerance === 'medium' ? 3 : 2,
+          } as Agent;
+        })();
         return { ...entry, user, agent };
       })
       .filter(e => e.user && e.agent);

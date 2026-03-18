@@ -8,6 +8,11 @@ const LEAGUE_CONFIG = [
   { id: "bronze", label: "🥉 Bronze", color: "#CD7F32", maxRank: 9999 },
 ];
 
+const MEME_AGENT_TYPES = new Set(["bull", "bear", "algo", "moon", "zen", "degen"]);
+function getAgentTier(selectedAgentType: string): "meme" | "hf" {
+  return MEME_AGENT_TYPES.has(selectedAgentType) ? "meme" : "hf";
+}
+
 function getLeague(rank: number) {
   if (rank <= 10) return LEAGUE_CONFIG[0];
   if (rank <= 50) return LEAGUE_CONFIG[1];
@@ -132,6 +137,7 @@ export default function Arena() {
           const isMe = entry.userId === 1;
           const staked = stakedMap.get(entry.userId) || 0;
           const isHeavilyStaked = staked >= 1000;
+          const tier = entry.user?.selectedAgentType ? getAgentTier(entry.user.selectedAgentType) : "meme";
           return (
             <div
               key={entry.userId}
@@ -155,6 +161,12 @@ export default function Arena() {
                 <div className="flex items-center gap-1.5">
                   <span className="font-display font-semibold text-sm text-[#E8E8E8] truncate">
                     {entry.user?.username}
+                  </span>
+                  <span className="text-[9px] px-1 rounded" style={{
+                    background: tier === "hf" ? "rgba(0,212,255,0.15)" : "rgba(255,59,154,0.15)",
+                    color: tier === "hf" ? "#00D4FF" : "#FF3B9A",
+                  }}>
+                    {tier === "hf" ? "🏦" : "🎭"}
                   </span>
                   {entry.user?.streak >= 5 && <span className="text-xs">🔥</span>}
                 </div>
