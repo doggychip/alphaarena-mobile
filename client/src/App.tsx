@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/Home";
 import Arena from "@/pages/Arena";
 import AgentPage from "@/pages/AgentPage";
+import Stake from "@/pages/Stake";
 import Profile from "@/pages/Profile";
 import NotFound from "@/pages/not-found";
 
@@ -16,7 +17,7 @@ function BottomNav() {
   const tabs = [
     { path: "/", label: "Home", emoji: "🏠" },
     { path: "/arena", label: "Arena", emoji: "⚔️" },
-    { path: "/agent", label: "Agent", emoji: "🤖" },
+    { path: "/stake", label: "Stake", emoji: "🔥" },
     { path: "/profile", label: "Profile", emoji: "👤" },
   ];
 
@@ -75,6 +76,7 @@ function AppRouter() {
           <Route path="/" component={Home} />
           <Route path="/arena" component={Arena} />
           <Route path="/agent" component={AgentPage} />
+          <Route path="/stake" component={Stake} />
           <Route path="/profile" component={Profile} />
           <Route component={NotFound} />
         </Switch>

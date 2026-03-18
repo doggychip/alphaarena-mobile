@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   avatarUrl: text("avatar_url"),
   level: integer("level").notNull().default(1),
   xp: integer("xp").notNull().default(0),
+  credits: integer("credits").notNull().default(1000),
   streak: integer("streak").notNull().default(0),
   longestStreak: integer("longest_streak").notNull().default(0),
   lastTradeDate: text("last_trade_date"),
@@ -154,3 +155,30 @@ export const agentMessages = pgTable("agent_messages", {
 export const insertAgentMessageSchema = createInsertSchema(agentMessages).omit({ id: true });
 export type InsertAgentMessage = z.infer<typeof insertAgentMessageSchema>;
 export type AgentMessage = typeof agentMessages.$inferSelect;
+
+// Agent Stakes — users staking credits on leaderboard agents
+export const stakes = pgTable("stakes", {
+  id: serial("id").primaryKey(),
+  stakerId: integer("staker_id").notNull(),
+  targetUserId: integer("target_user_id").notNull(),
+  amount: integer("amount").notNull(),
+  stakedAt: text("staked_at").notNull(),
+});
+
+export const insertStakeSchema = createInsertSchema(stakes).omit({ id: true });
+export type InsertStake = z.infer<typeof insertStakeSchema>;
+export type Stake = typeof stakes.$inferSelect;
+
+// Staking Rewards — historical reward payouts
+export const stakingRewards = pgTable("staking_rewards", {
+  id: serial("id").primaryKey(),
+  stakerId: integer("staker_id").notNull(),
+  targetUserId: integer("target_user_id").notNull(),
+  amount: integer("amount").notNull(),
+  reason: text("reason").notNull(),
+  earnedAt: text("earned_at").notNull(),
+});
+
+export const insertStakingRewardSchema = createInsertSchema(stakingRewards).omit({ id: true });
+export type InsertStakingReward = z.infer<typeof insertStakingRewardSchema>;
+export type StakingReward = typeof stakingRewards.$inferSelect;

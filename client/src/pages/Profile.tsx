@@ -27,6 +27,7 @@ function getLevelInfo(xp: number) {
 export default function Profile() {
   const { data: meData } = useQuery<any>({ queryKey: ["/api/me"] });
   const { data: portfolioData } = useQuery<any>({ queryKey: ["/api/portfolio"] });
+  const { data: stakingRewards } = useQuery<any>({ queryKey: ["/api/staking/rewards"] });
 
   const user = meData?.user;
   const portfolio = meData?.portfolio;
@@ -41,14 +42,15 @@ export default function Profile() {
 
   const totalReturn = leaderboard?.totalReturn || 0;
   const portfolioValue = portfolio?.totalEquity || 100000;
+  const totalStakingRewards = (stakingRewards || []).reduce((sum: number, r: any) => sum + r.amount, 0);
 
   // Stats
   const stats = [
     { emoji: "📊", label: "Total Return", value: `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(1)}%`, color: totalReturn >= 0 ? "#00FF88" : "#FF3B9A" },
     { emoji: "🏆", label: "Best Rank", value: `#${leaderboard?.rank || "-"}`, color: "#FFD700" },
     { emoji: "🔥", label: "Longest Streak", value: `${user?.longestStreak || 0}d`, color: "#FF3B9A" },
-    { emoji: "⚡", label: "Total Trades", value: "89", color: "#00D4FF" },
-    { emoji: "💰", label: "Portfolio Value", value: `$${(portfolioValue / 1000).toFixed(1)}k`, color: "#00FF88" },
+    { emoji: "💰", label: "Credits", value: `${(user?.credits || 0).toLocaleString()}`, color: "#FFD700" },
+    { emoji: "📈", label: "Staking Rewards", value: `+${totalStakingRewards.toLocaleString()}`, color: "#00FF88" },
     { emoji: "🎯", label: "Win Rate", value: `${leaderboard?.winRate?.toFixed(0) || 62}%`, color: "#FFD700" },
   ];
 

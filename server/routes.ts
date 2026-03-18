@@ -176,6 +176,139 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json(snapshots);
   });
 
+  // === STAKING ===
+
+  // Get demo user's stakes with target user info
+  app.get("/api/staking/my-stakes", (_req, res) => {
+    const stakes = storage.getStakesByStaker(DEMO_USER_ID);
+    const enriched = stakes.map(s => {
+      const targetUser = storage.getUser(s.targetUserId);
+      const agent = targetUser ? storage.getAgent(targetUser.selectedAgentType) : undefined;
+      const leaderboardEntry = storage.getLeaderboardEntry(s.targetUserId);
+      return { ...s, targetUser, agent, leaderboardEntry };
+    });
+    res.json(enriched);
+  });
+
+  // Staking leaderboard — top agents by total credits staked
+  app.get("/api/staking/leaderboard", (_req, res) => {
+    const leaderboard = storage.getStakingLeaderboard();
+    const enriched = leaderboard.map(entry => {
+      const user = storage.getUser(entry.targetUserId);
+      const agent = user ? storage.getAgent(user.selectedAgentType) : undefined;
+      const lb = storage.getLeaderboardEntry(entry.targetUserId);
+      return { ...entry, user, agent, leaderboardEntry: lb };
+    });
+    res.json(enriched);
+  });
+
+  // Get staking info for a specific agent/user
+  app.get("/api/staking/agent/:userId", (req, res) => {
+    const userId = parseInt(req.params.userId);
+    const totalStaked = storage.getTotalStakedOnUser(userId);
+    const stakesOnTarget = storage.getStakesByTarget(userId);
+    const myStake = storage.getStake(DEMO_USER_ID, userId);
+    const user = storage.getUser(userId);
+    const agent = user ? storage.getAgent(user.selectedAgentType) : undefined;
+    const leaderboardEntry = storage.getLeaderboardEntry(userId);
+    res.json({
+      totalStaked,
+      stakerCount: new Set(stakesOnTarget.map(s => s.stakerId)).size,
+      myStake,
+      user,
+      agent,
+      leaderboardEntry,
+    });
+  });
+
+  // Demo user's reward history
+  app.get("/api/staking/rewards", (_req, res) => {
+    const rewards = storage.getRewardsByStaker(DEMO_USER_ID);
+    const enriched = rewards.map(r => {
+      const targetUser = storage.getUser(r.targetUserId);
+      return { ...r, targetUser };
+    });
+    res.json(enriched);
+  });
+
+  // Stake credits on an agent
+  app.post("/api/staking/stake", (req, res) => {
+    const { targetUserId, amount } = req.body;
+    if (!targetUserId || !amount || amount <= 0) {
+      return res.status(400).json({ message: "Invalid targetUserId or amount" });
+    }
+
+    const user = storage.getUser(DEMO_USER_ID);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.credits < amount) {
+      return res.status(400).json({ message: "Insufficient credits" });
+    }
+
+    const target = storage.getUser(targetUserId);
+    if (!target) return res.status(404).json({ message: "Target user not found" });
+
+    // Check if already staked — if so, add to existing
+    const existing = storage.getStake(DEMO_USER_ID, targetUserId);
+    if (existing) {
+      storage.updateStake(DEMO_USER_ID, targetUserId, existing.amount + amount);
+    } else {
+      storage.addStake({
+        stakerId: DEMO_USER_ID,
+        targetUserId,
+        amount,
+        stakedAt: new Date().toISOString(),
+      });
+    }
+
+    // Deduct credits
+    storage.updateUser(DEMO_USER_ID, { credits: user.credits - amount });
+
+    // XP bonus
+    storage.updateUser(DEMO_USER_ID, { xp: (user.xp || 0) + 25 });
+
+    res.json({ message: "Staked successfully", xpBonus: 25 });
+  });
+
+  // Unstake credits from an agent
+  app.post("/api/staking/unstake", (req, res) => {
+    const { targetUserId } = req.body;
+    if (!targetUserId) {
+      return res.status(400).json({ message: "Missing targetUserId" });
+    }
+
+    const stake = storage.getStake(DEMO_USER_ID, targetUserId);
+    if (!stake) return res.status(404).json({ message: "No stake found" });
+
+    const user = storage.getUser(DEMO_USER_ID);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Return credits
+    storage.updateUser(DEMO_USER_ID, { credits: user.credits + stake.amount });
+
+    // Remove stake
+    storage.removeStake(DEMO_USER_ID, targetUserId);
+
+    res.json({ message: "Unstaked successfully", creditsReturned: stake.amount });
+  });
+
+  // Overall staking stats
+  app.get("/api/staking/stats", (_req, res) => {
+    const leaderboard = storage.getStakingLeaderboard();
+    const totalStaked = leaderboard.reduce((sum, e) => sum + e.totalStaked, 0);
+    const allStakerIds = new Set<number>();
+    for (const e of leaderboard) {
+      const stakes = storage.getStakesByTarget(e.targetUserId);
+      stakes.forEach(s => allStakerIds.add(s.stakerId));
+    }
+    res.json({
+      totalStaked,
+      totalStakers: allStakerIds.size,
+      avgApy: 12.4,
+      totalAgentsStaked: leaderboard.length,
+    });
+  });
+
   // Get another user's profile (from leaderboard)
   app.get("/api/user/:id", (req, res) => {
     const userId = parseInt(req.params.id);

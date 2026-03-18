@@ -21,6 +21,11 @@ export default function Arena() {
   const { data: meData } = useQuery<any>({ queryKey: ["/api/me"] });
   const { data: leaderboardData } = useQuery<any>({ queryKey: ["/api/leaderboard"] });
   const { data: competitionData } = useQuery<any>({ queryKey: ["/api/competition"] });
+  const { data: stakingLeaderboard } = useQuery<any>({ queryKey: ["/api/staking/leaderboard"] });
+
+  // Build a map of userId -> totalStaked for quick lookup
+  const stakedMap = new Map<number, number>();
+  (stakingLeaderboard || []).forEach((e: any) => stakedMap.set(e.targetUserId, e.totalStaked));
 
   const competition = competitionData;
   const entries = leaderboardData?.entries || [];
@@ -125,12 +130,14 @@ export default function Arena() {
         {filteredEntries.map((entry: any) => {
           const league = getLeague(entry.rank);
           const isMe = entry.userId === 1;
+          const staked = stakedMap.get(entry.userId) || 0;
+          const isHeavilyStaked = staked >= 1000;
           return (
             <div
               key={entry.userId}
               data-testid={`leaderboard-entry-${entry.userId}`}
               className={`rounded-2xl bg-[#1A1A2E] border p-3 flex items-center gap-3 card-tap ${
-                isMe ? "border-neon-green/50 glow-green" : "border-[#2A2A3E]"
+                isMe ? "border-neon-green/50 glow-green" : isHeavilyStaked ? "border-neon-gold/40" : "border-[#2A2A3E]"
               }`}
             >
               {/* Rank */}
@@ -158,6 +165,11 @@ export default function Arena() {
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A3E] text-[#888899]">
                     {entry.agent?.tradingStyle?.split("/")[0]}
                   </span>
+                  {staked > 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-neon-gold/10 text-neon-gold font-mono-num">
+                      💰 {staked.toLocaleString()}
+                    </span>
+                  )}
                 </div>
               </div>
               {/* Return */}

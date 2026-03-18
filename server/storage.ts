@@ -9,6 +9,8 @@ import type {
   LeaderboardEntry, InsertLeaderboardEntry,
   Achievement, InsertAchievement,
   AgentMessage, InsertAgentMessage,
+  Stake, InsertStake,
+  StakingReward, InsertStakingReward,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -50,6 +52,20 @@ export interface IStorage {
   // Agent Messages
   getAgentMessages(agentType: string, mood?: string): AgentMessage[];
   getRandomAgentMessage(agentType: string, mood?: string): AgentMessage | undefined;
+
+  // Staking
+  getStakesByStaker(stakerId: number): Stake[];
+  getStakesByTarget(targetUserId: number): Stake[];
+  getStake(stakerId: number, targetUserId: number): Stake | undefined;
+  getTotalStakedOnUser(targetUserId: number): number;
+  addStake(stake: InsertStake): Stake;
+  removeStake(stakerId: number, targetUserId: number): boolean;
+  updateStake(stakerId: number, targetUserId: number, amount: number): Stake | undefined;
+
+  // Staking Rewards
+  getRewardsByStaker(stakerId: number): StakingReward[];
+  addReward(reward: InsertStakingReward): StakingReward;
+  getStakingLeaderboard(): { targetUserId: number; totalStaked: number; stakerCount: number }[];
 }
 
 // Seed data
@@ -84,7 +100,7 @@ function generateSeedData() {
   const users: User[] = [
     {
       id: 1, username: "DegenRyan", email: "ryan@alpha.gg",
-      avatarUrl: null, level: 12, xp: 3400, streak: 7,
+      avatarUrl: null, level: 12, xp: 3400, credits: 5000, streak: 7,
       longestStreak: 14, lastTradeDate: now.toISOString().split("T")[0],
       selectedAgentType: "bull", createdAt: new Date(now.getTime() - 30 * 86400000).toISOString(),
     },
@@ -99,6 +115,7 @@ function generateSeedData() {
       avatarUrl: null,
       level,
       xp: level * 200 + Math.floor(Math.random() * 400),
+      credits: 500 + Math.floor(Math.random() * 4500),
       streak: Math.floor(Math.random() * 20),
       longestStreak: Math.floor(Math.random() * 30) + 1,
       lastTradeDate: new Date(now.getTime() - Math.floor(Math.random() * 3) * 86400000).toISOString().split("T")[0],
@@ -389,7 +406,59 @@ function generateSeedData() {
     }
   }
 
-  return { agents, users, competition, portfolios, positions, trades, snapshots, leaderboard, userAchievements, agentMessagesData, achievementDefs };
+  // Stakes seed data
+  const stakesData: Stake[] = [];
+  let stakeId = 1;
+
+  // Demo user stakes on top agents
+  const topAgentUserIds = leaderboard.slice(0, 10).map(e => e.userId).filter(id => id !== 1);
+
+  // Demo user stakes on 4 agents
+  const demoStakeTargets = topAgentUserIds.slice(0, 4);
+  const demoStakeAmounts = [800, 500, 350, 200];
+  for (let i = 0; i < demoStakeTargets.length; i++) {
+    stakesData.push({
+      id: stakeId++,
+      stakerId: 1,
+      targetUserId: demoStakeTargets[i],
+      amount: demoStakeAmounts[i],
+      stakedAt: new Date(now.getTime() - (10 - i) * 86400000).toISOString(),
+    });
+  }
+
+  // Other users stake on various agents (~60 total stakes)
+  for (let i = 2; i <= 33; i++) {
+    // Each user stakes on 1-3 agents
+    const numStakes = Math.floor(Math.random() * 3) + 1;
+    const targets = [...topAgentUserIds].sort(() => Math.random() - 0.5).slice(0, numStakes);
+    for (const targetId of targets) {
+      if (targetId === i) continue; // Don't stake on self
+      stakesData.push({
+        id: stakeId++,
+        stakerId: i,
+        targetUserId: targetId,
+        amount: 100 + Math.floor(Math.random() * 900),
+        stakedAt: new Date(now.getTime() - Math.floor(Math.random() * 14) * 86400000).toISOString(),
+      });
+    }
+  }
+
+  // Staking rewards for demo user
+  const rewardsData: StakingReward[] = [];
+  let rewardId = 1;
+  const rewardReasons = ["daily_performance", "league_promotion", "daily_performance", "season_end", "daily_performance", "daily_performance", "league_promotion", "daily_performance"];
+  for (let i = 0; i < 8; i++) {
+    rewardsData.push({
+      id: rewardId++,
+      stakerId: 1,
+      targetUserId: demoStakeTargets[i % demoStakeTargets.length],
+      amount: 20 + Math.floor(Math.random() * 80),
+      reason: rewardReasons[i],
+      earnedAt: new Date(now.getTime() - (8 - i) * 86400000).toISOString(),
+    });
+  }
+
+  return { agents, users, competition, portfolios, positions, trades, snapshots, leaderboard, userAchievements, agentMessagesData, achievementDefs, stakesData, rewardsData };
 }
 
 export class MemStorage implements IStorage {
@@ -403,10 +472,14 @@ export class MemStorage implements IStorage {
   private leaderboard: LeaderboardEntry[] = [];
   private achievements: Map<number, Achievement[]> = new Map(); // keyed by userId
   private agentMessages: AgentMessage[] = [];
+  private stakes: Stake[] = [];
+  private stakingRewards: StakingReward[] = [];
 
   private nextTradeId = 100;
   private nextPositionId = 100;
   private nextAchievementId = 100;
+  private nextStakeId = 200;
+  private nextRewardId = 200;
 
   constructor() {
     const seed = generateSeedData();
@@ -436,6 +509,8 @@ export class MemStorage implements IStorage {
     this.achievements = achByUser;
     
     this.agentMessages = seed.agentMessagesData;
+    this.stakes = seed.stakesData;
+    this.stakingRewards = seed.rewardsData;
   }
 
   getUser(id: number): User | undefined {
@@ -550,6 +625,67 @@ export class MemStorage implements IStorage {
     const msgs = this.getAgentMessages(agentType, mood);
     if (msgs.length === 0) return undefined;
     return msgs[Math.floor(Math.random() * msgs.length)];
+  }
+
+  // Staking
+  getStakesByStaker(stakerId: number): Stake[] {
+    return this.stakes.filter(s => s.stakerId === stakerId);
+  }
+
+  getStakesByTarget(targetUserId: number): Stake[] {
+    return this.stakes.filter(s => s.targetUserId === targetUserId);
+  }
+
+  getStake(stakerId: number, targetUserId: number): Stake | undefined {
+    return this.stakes.find(s => s.stakerId === stakerId && s.targetUserId === targetUserId);
+  }
+
+  getTotalStakedOnUser(targetUserId: number): number {
+    return this.stakes.filter(s => s.targetUserId === targetUserId).reduce((sum, s) => sum + s.amount, 0);
+  }
+
+  addStake(stake: InsertStake): Stake {
+    const newStake: Stake = { ...stake, id: this.nextStakeId++ };
+    this.stakes.push(newStake);
+    return newStake;
+  }
+
+  removeStake(stakerId: number, targetUserId: number): boolean {
+    const idx = this.stakes.findIndex(s => s.stakerId === stakerId && s.targetUserId === targetUserId);
+    if (idx === -1) return false;
+    this.stakes.splice(idx, 1);
+    return true;
+  }
+
+  updateStake(stakerId: number, targetUserId: number, amount: number): Stake | undefined {
+    const stake = this.stakes.find(s => s.stakerId === stakerId && s.targetUserId === targetUserId);
+    if (!stake) return undefined;
+    stake.amount = amount;
+    return stake;
+  }
+
+  // Staking Rewards
+  getRewardsByStaker(stakerId: number): StakingReward[] {
+    return this.stakingRewards.filter(r => r.stakerId === stakerId).sort((a, b) => new Date(b.earnedAt).getTime() - new Date(a.earnedAt).getTime());
+  }
+
+  addReward(reward: InsertStakingReward): StakingReward {
+    const newReward: StakingReward = { ...reward, id: this.nextRewardId++ };
+    this.stakingRewards.push(newReward);
+    return newReward;
+  }
+
+  getStakingLeaderboard(): { targetUserId: number; totalStaked: number; stakerCount: number }[] {
+    const map = new Map<number, { totalStaked: number; stakers: Set<number> }>();
+    for (const s of this.stakes) {
+      if (!map.has(s.targetUserId)) map.set(s.targetUserId, { totalStaked: 0, stakers: new Set() });
+      const entry = map.get(s.targetUserId)!;
+      entry.totalStaked += s.amount;
+      entry.stakers.add(s.stakerId);
+    }
+    return Array.from(map.entries())
+      .map(([targetUserId, data]) => ({ targetUserId, totalStaked: data.totalStaked, stakerCount: data.stakers.size }))
+      .sort((a, b) => b.totalStaked - a.totalStaked);
   }
 }
 
