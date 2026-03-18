@@ -1,0 +1,209 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* DARK MODE ONLY - AlphaArena Neon Theme */
+:root {
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
+  --opaque-button-border-intensity: 9;
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .09);
+
+  --background: 240 20% 4%;
+  --foreground: 0 0% 91%;
+  --border: 240 15% 16%;
+  --card: 240 20% 8%;
+  --card-foreground: 0 0% 91%;
+  --card-border: 240 15% 16%;
+  --popover: 240 20% 8%;
+  --popover-foreground: 0 0% 91%;
+  --popover-border: 240 15% 16%;
+
+  /* Primary = Electric green */
+  --primary: 155 100% 50%;
+  --primary-foreground: 240 20% 4%;
+
+  /* Secondary = Surface-2 */
+  --secondary: 240 18% 11%;
+  --secondary-foreground: 0 0% 91%;
+
+  /* Muted */
+  --muted: 240 18% 11%;
+  --muted-foreground: 240 10% 55%;
+
+  /* Accent = Neon cyan */
+  --accent: 194 100% 42%;
+  --accent-foreground: 240 20% 4%;
+
+  /* Destructive = Hot pink */
+  --destructive: 338 100% 62%;
+  --destructive-foreground: 0 0% 100%;
+
+  --input: 240 15% 20%;
+  --ring: 155 100% 50%;
+
+  --chart-1: 155 100% 50%;
+  --chart-2: 338 100% 62%;
+  --chart-3: 194 100% 42%;
+  --chart-4: 51 100% 50%;
+  --chart-5: 280 80% 60%;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 1rem;
+
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
+  --spacing: 0.25rem;
+
+  /* Custom neon vars */
+  --neon-green: #00FF88;
+  --neon-pink: #FF3B9A;
+  --neon-cyan: #00D4FF;
+  --neon-gold: #FFD700;
+  --surface-1: #12121A;
+  --surface-2: #1A1A2E;
+  --surface-3: #1E1E32;
+  --border-color: #2A2A3E;
+}
+
+/* Force dark mode always */
+.dark {
+  /* Same as root - dark only */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: none;
+  }
+}
+
+/* Font utilities */
+.font-display {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.font-mono-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Neon glow effects */
+.glow-green {
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.3), 0 0 40px rgba(0, 255, 136, 0.1);
+}
+
+.glow-pink {
+  box-shadow: 0 0 20px rgba(255, 59, 154, 0.3), 0 0 40px rgba(255, 59, 154, 0.1);
+}
+
+.glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3), 0 0 40px rgba(0, 212, 255, 0.1);
+}
+
+.glow-gold {
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3), 0 0 40px rgba(255, 215, 0, 0.1);
+}
+
+.text-glow-green {
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+}
+
+.text-glow-pink {
+  text-shadow: 0 0 10px rgba(255, 59, 154, 0.5);
+}
+
+/* Ticker animation */
+@keyframes ticker-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-ticker {
+  animation: ticker-scroll 30s linear infinite;
+}
+
+/* Pulse glow for streaks */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.1); }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 1.5s ease-in-out infinite;
+}
+
+/* Bounce for agent */
+@keyframes gentle-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-bounce-gentle {
+  animation: gentle-bounce 3s ease-in-out infinite;
+}
+
+/* Card tap effect */
+.card-tap {
+  transition: transform 0.1s ease;
+}
+
+.card-tap:active {
+  transform: scale(0.98);
+}
+
+/* Scrollbar hide */
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area padding */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Neon border animation */
+@keyframes neon-border {
+  0%, 100% { border-color: rgba(0, 255, 136, 0.5); }
+  33% { border-color: rgba(0, 212, 255, 0.5); }
+  66% { border-color: rgba(255, 59, 154, 0.5); }
+}
+
+.animate-neon-border {
+  animation: neon-border 3s ease-in-out infinite;
+}
+
+/* Speech bubble pointer */
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 24px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid var(--surface-3);
+}
