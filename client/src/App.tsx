@@ -14,6 +14,7 @@ import Stake from "@/pages/Stake";
 import Profile from "@/pages/Profile";
 import Auth from "@/pages/Auth";
 import HowToPlay from "@/pages/HowToPlay";
+import AgentPicker from "@/pages/AgentPicker";
 import NotFound from "@/pages/not-found";
 
 function LoadingScreen() {
@@ -112,6 +113,7 @@ function AppRouter() {
               <Route path="/stake" component={Stake} />
               <Route path="/profile" component={Profile} />
               <Route path="/how-to-play" component={HowToPlay} />
+              <Route path="/pick-agent" component={AgentPicker} />
               <Route component={NotFound} />
             </>
           )}

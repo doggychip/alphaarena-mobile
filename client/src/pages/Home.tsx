@@ -154,13 +154,36 @@ export default function Home() {
         <PriceTicker prices={prices} />
       </div>
 
+      {/* Agent Discovery Banner — shows until dismissed */}
+      {agent && !localStorage.getItem("alphaarena_picked_agent") && (
+        <Link href="/pick-agent">
+          <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-neon-cyan/10 to-neon-pink/10 border border-neon-cyan/30 p-4 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform">
+            <div className="flex -space-x-2">
+              <span className="text-2xl">🐂</span>
+              <span className="text-2xl">🐻</span>
+              <span className="text-2xl">🧠</span>
+            </div>
+            <div className="flex-1">
+              <p className="font-display font-bold text-sm text-[#E8E8E8]">25 AI Agents available</p>
+              <p className="text-[10px] text-[#888899] mt-0.5">Meme companions & HF analysts — tap to explore & pick yours</p>
+            </div>
+            <span className="text-neon-cyan text-lg">›</span>
+          </div>
+        </Link>
+      )}
+
       {/* Agent Card */}
       {agent && (
         <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
           <div className="flex items-start gap-3">
-            <div className="w-16 h-16 rounded-full bg-[#0A0A0F] border-2 border-neon-cyan/50 flex items-center justify-center text-3xl animate-bounce-gentle">
-              {agent.avatarEmoji}
-            </div>
+            <Link href="/pick-agent">
+              <div className="w-16 h-16 rounded-full bg-[#0A0A0F] border-2 border-neon-cyan/50 flex items-center justify-center text-3xl animate-bounce-gentle relative cursor-pointer">
+                {agent.avatarEmoji}
+                <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#1A1A2E] border border-neon-cyan/40 flex items-center justify-center">
+                  <span className="text-[8px]">🔄</span>
+                </div>
+              </div>
+            </Link>
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-display font-bold text-[#E8E8E8]">{agent.name}</span>
@@ -173,6 +196,9 @@ export default function Home() {
                   {agent.personality}
                 </span>
               )}
+              <Link href="/pick-agent">
+                <span className="text-[10px] text-neon-cyan font-display mt-1 inline-block cursor-pointer">Switch Agent →</span>
+              </Link>
             </div>
           </div>
           {/* Speech Bubble */}
