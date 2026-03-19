@@ -4,6 +4,7 @@ import passport from "passport";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { storage } from "./storage";
+import type { InsertCommittee, InsertCommitteeMember, CommitteeMemberVote, CommitteeConsensus } from "@shared/schema";
 import { startPriceEngine, getCurrentPrices, getPriceForPair } from "./prices";
 import { startSignalFetcher, getSignalFetchStatus } from "./signalFetcher";
 import { startRewardEngine, getRewardEngineStatus, calculateAndDistributeRewards } from "./rewardEngine";
@@ -1062,6 +1063,365 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
     await storage.updateExternalAgent(agent.agentId, { reputation: agent.reputation + 2 });
     res.status(201).json({ message: "Reply posted", reply });
+  });
+
+  // ============================================================
+  // COMMITTEES — user-assembled agent panels for consensus signals
+  // ============================================================
+
+  // Helper: enrich a committee's members with agent metadata
+  async function enrichMembers(committeeId: number) {
+    const members = await storage.getCommitteeMembers(committeeId);
+    return Promise.all(members.map(async m => {
+      const hf = await storage.getHedgeFundAgent(m.agentId);
+      const ext = !hf ? await storage.getExternalAgent(m.agentId) : undefined;
+      const agent = hf || ext;
+      return {
+        ...m,
+        agentName: agent ? agent.name : m.agentId,
+        agentEmoji: agent ? (agent as any).emoji || (agent as any).avatarEmoji || "🤖" : "🤖",
+        winRate: agent ? (agent as any).winRate ?? 0 : 0,
+        totalSignals: agent ? (agent as any).totalSignals ?? 0 : 0,
+      };
+    }));
+  }
+
+  // POST /api/committees — Create a new committee
+  app.post("/api/committees", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const { name, emoji, description, members } = req.body;
+
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ message: "Committee name is required" });
+      }
+      if (!Array.isArray(members) || members.length < 3 || members.length > 5) {
+        return res.status(400).json({ message: "A committee requires 3–5 members" });
+      }
+
+      const committee = await storage.createCommittee({
+        userId,
+        name: name.trim(),
+        emoji: emoji || "🏛️",
+        description: description || null,
+        status: "active",
+        totalSignals: 0,
+        accuracy: 0,
+        createdAt: new Date().toISOString(),
+      } as InsertCommittee);
+
+      for (const m of members) {
+        await storage.addCommitteeMember({
+          committeeId: committee.id,
+          agentId: m.agentId,
+          agentSource: m.agentSource || "internal",
+          weight: m.weight ?? 1,
+          addedAt: new Date().toISOString(),
+        } as InsertCommitteeMember);
+      }
+
+      const enriched = await enrichMembers(committee.id);
+      return res.status(201).json({ ...committee, members: enriched });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET /api/committees/leaderboard — All committees sorted by accuracy (must come before :id)
+  app.get("/api/committees/leaderboard", async (req: Request, res: Response) => {
+    try {
+      const all = await storage.getAllCommitteeSignals(1000);
+      // aggregate per committee
+      const statsMap = new Map<number, { total: number; correct: number }>();
+      for (const s of all) {
+        const entry = statsMap.get(s.committeeId) || { total: 0, correct: 0 };
+        entry.total++;
+        if (s.isCorrect === true) entry.correct++;
+        statsMap.set(s.committeeId, entry);
+      }
+
+      const allSignals = await storage.getAllCommitteeSignals(10000);
+      const committeeIds = Array.from(new Set(allSignals.map(s => s.committeeId)));
+      const leaderboard = await Promise.all(committeeIds.map(async cid => {
+        const committee = await storage.getCommittee(cid);
+        if (!committee) return null;
+        const stats = statsMap.get(cid) || { total: 0, correct: 0 };
+        const accuracy = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : committee.accuracy;
+        return { ...committee, accuracy, totalSignals: stats.total };
+      }));
+
+      const result = leaderboard
+        .filter(Boolean)
+        .sort((a: any, b: any) => b.accuracy - a.accuracy);
+
+      return res.json(result);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET /api/committees — Get authenticated user's committees
+  app.get("/api/committees", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const committees = await storage.getCommitteesByUser(userId);
+      const enriched = await Promise.all(committees.map(async c => {
+        const members = await enrichMembers(c.id);
+        return { ...c, members };
+      }));
+      return res.json(enriched);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET /api/committees/:id — Get single committee with members + recent signals
+  app.get("/api/committees/:id", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(String(req.params.id));
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid committee id" });
+      const committee = await storage.getCommittee(id);
+      if (!committee) return res.status(404).json({ message: "Committee not found" });
+      const members = await enrichMembers(id);
+      const signals = await storage.getCommitteeSignals(id, 20);
+      return res.json({ ...committee, members, recentSignals: signals });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // PUT /api/committees/:id — Update committee metadata
+  app.put("/api/committees/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(String(req.params.id));
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid committee id" });
+      const userId = getUserId(req);
+      const committee = await storage.getCommittee(id);
+      if (!committee) return res.status(404).json({ message: "Committee not found" });
+      if (committee.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const { name, emoji, description } = req.body;
+      const updated = await storage.updateCommittee(id, {
+        ...(name !== undefined && { name }),
+        ...(emoji !== undefined && { emoji }),
+        ...(description !== undefined && { description }),
+      });
+      return res.json(updated);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // DELETE /api/committees/:id — Delete committee (owner only)
+  app.delete("/api/committees/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(String(req.params.id));
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid committee id" });
+      const userId = getUserId(req);
+      const committee = await storage.getCommittee(id);
+      if (!committee) return res.status(404).json({ message: "Committee not found" });
+      if (committee.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+      await storage.deleteCommittee(id);
+      return res.json({ message: "Committee deleted" });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // POST /api/committees/:id/members — Add a member
+  app.post("/api/committees/:id/members", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const committeeId = parseInt(String(req.params.id));
+      if (isNaN(committeeId)) return res.status(400).json({ message: "Invalid committee id" });
+      const userId = getUserId(req);
+      const committee = await storage.getCommittee(committeeId);
+      if (!committee) return res.status(404).json({ message: "Committee not found" });
+      if (committee.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const { agentId, agentSource, weight } = req.body;
+      if (!agentId) return res.status(400).json({ message: "agentId is required" });
+
+      const member = await storage.addCommitteeMember({
+        committeeId,
+        agentId,
+        agentSource: agentSource || "internal",
+        weight: weight ?? 1,
+        addedAt: new Date().toISOString(),
+      } as InsertCommitteeMember);
+      return res.status(201).json(member);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // DELETE /api/committees/:id/members/:agentId — Remove a member
+  app.delete("/api/committees/:id/members/:agentId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const committeeId = parseInt(String(req.params.id));
+      if (isNaN(committeeId)) return res.status(400).json({ message: "Invalid committee id" });
+      const userId = getUserId(req);
+      const committee = await storage.getCommittee(committeeId);
+      if (!committee) return res.status(404).json({ message: "Committee not found" });
+      if (committee.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const agentId = String(req.params.agentId);
+      const removed = await storage.removeCommitteeMember(committeeId, agentId);
+      if (!removed) return res.status(404).json({ message: "Member not found" });
+      return res.json({ message: "Member removed" });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // POST /api/committees/:id/consensus/:ticker — Generate a weighted consensus signal
+  app.post("/api/committees/:id/consensus/:ticker", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const committeeId = parseInt(String(req.params.id));
+      if (isNaN(committeeId)) return res.status(400).json({ message: "Invalid committee id" });
+      const ticker = String(req.params.ticker).toUpperCase();
+      const userId = getUserId(req);
+
+      const committee = await storage.getCommittee(committeeId);
+      if (!committee) return res.status(404).json({ message: "Committee not found" });
+      if (committee.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const members = await storage.getCommitteeMembers(committeeId);
+      if (members.length === 0) return res.status(400).json({ message: "Committee has no members" });
+
+      // Build member votes
+      const votes: CommitteeMemberVote[] = [];
+      let bullishVotes = 0;
+      let bearishVotes = 0;
+      let neutralVotes = 0;
+
+      for (const m of members) {
+        const hf = await storage.getHedgeFundAgent(m.agentId);
+        const ext = !hf ? await storage.getExternalAgent(m.agentId) : undefined;
+        const agentMeta = hf || ext;
+        const agentName = agentMeta ? agentMeta.name : m.agentId;
+        const agentEmoji = agentMeta ? (agentMeta as any).emoji || (agentMeta as any).avatarEmoji || "🤖" : "🤖";
+
+        const latestSignal = await storage.getLatestSignalByAgent(m.agentId, ticker);
+        const signal = latestSignal?.signal ?? "neutral";
+        const confidence = latestSignal?.confidence ?? 50;
+        const reasoning = latestSignal?.reasoning ?? "No recent signal available";
+
+        const signalScore = signal === "bullish" ? 1 : signal === "bearish" ? -1 : 0;
+        const weightedScore = signalScore * (confidence / 100) * m.weight;
+
+        if (signal === "bullish") bullishVotes++;
+        else if (signal === "bearish") bearishVotes++;
+        else neutralVotes++;
+
+        votes.push({
+          agentId: m.agentId,
+          agentName,
+          agentEmoji,
+          signal,
+          confidence,
+          reasoning,
+          weight: m.weight,
+          weightedScore,
+        });
+      }
+
+      // Calculate weighted consensus
+      const totalWeight = members.reduce((sum, m) => sum + m.weight, 0);
+      const weightedSum = votes.reduce((sum, v) => sum + v.weightedScore, 0);
+      const normalized = totalWeight > 0 ? weightedSum / totalWeight : 0;
+
+      const consensusSignal = normalized > 0.2 ? "bullish" : normalized < -0.2 ? "bearish" : "neutral";
+
+      // Weighted average confidence
+      const consensusConfidence = Math.round(
+        votes.reduce((sum, v) => sum + v.confidence * v.weight, 0) / totalWeight
+      );
+
+      // Agreement = 100 - (stddev of member scores × 50), clamped 0-100
+      const memberScores: number[] = votes.map(v => v.signal === "bullish" ? 1 : v.signal === "bearish" ? -1 : 0);
+      const mean = memberScores.reduce((s: number, x: number) => s + x, 0) / memberScores.length;
+      const variance = memberScores.reduce((s: number, x: number) => s + Math.pow(x - mean, 2), 0) / memberScores.length;
+      const stddev = Math.sqrt(variance);
+      const agreement = Math.max(0, Math.min(100, Math.round(100 - stddev * 50)));
+
+      const now = new Date().toISOString();
+      const savedSignal = await storage.createCommitteeSignal({
+        committeeId,
+        ticker,
+        consensusSignal,
+        consensusConfidence,
+        memberVotes: JSON.stringify(votes),
+        bullishVotes,
+        bearishVotes,
+        neutralVotes,
+        agreement,
+        isCorrect: null,
+        actualPrice: null,
+        pnlPercent: null,
+        createdAt: now,
+        resolvedAt: null,
+      });
+
+      // Increment committee signal count
+      await storage.updateCommittee(committeeId, { totalSignals: committee.totalSignals + 1 });
+
+      const consensus: CommitteeConsensus = {
+        committeeId,
+        committeeName: committee.name,
+        ticker,
+        signal: consensusSignal,
+        confidence: consensusConfidence,
+        agreement,
+        votes,
+        bullish: bullishVotes,
+        bearish: bearishVotes,
+        neutral: neutralVotes,
+        createdAt: now,
+      };
+
+      // Return a flat ConsensusResult matching what the UI expects
+      return res.status(201).json({
+        signal: consensusSignal,
+        confidence: consensusConfidence,
+        agreement,
+        memberVotes: votes.map(v => ({
+          agentId: v.agentId,
+          agentName: v.agentName,
+          agentEmoji: v.agentEmoji,
+          signal: v.signal,
+          confidence: v.confidence,
+          reasoning: v.reasoning,
+          weight: v.weight,
+        })),
+        ticker,
+        generatedAt: now,
+      });
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET /api/committees/:id/signals — Get committee's signal history
+  app.get("/api/committees/:id/signals", async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(String(req.params.id));
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid committee id" });
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+      const signals = await storage.getCommitteeSignals(id, limit);
+      // Normalize DB field names to match UI's SignalHistory type
+      const normalized = signals.map(s => ({
+        id: s.id,
+        ticker: s.ticker,
+        signal: s.consensusSignal,
+        confidence: s.consensusConfidence,
+        agreement: s.agreement,
+        createdAt: s.createdAt,
+        memberVotes: typeof s.memberVotes === "string" ? JSON.parse(s.memberVotes) : s.memberVotes,
+      }));
+      return res.json(normalized);
+    } catch (err: any) {
+      return res.status(500).json({ message: err.message });
+    }
   });
 
   // ============================================================

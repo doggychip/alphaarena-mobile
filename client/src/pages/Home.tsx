@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import TradeModal from "@/components/TradeModal";
 import NotificationPanel, { useUnreadCount } from "@/components/NotificationPanel";
+import { useAuth } from "@/hooks/useAuth";
 
 // AlphaArena Logo SVG
 function Logo() {
@@ -297,6 +298,16 @@ export default function Home() {
     enabled: !!meData?.user?.selectedAgentType && !isHF,
   });
 
+  // Auth for committees
+  const { user: authUser } = useAuth();
+  const isGuest = localStorage.getItem("alphaarena_guest") === "true";
+
+  // Fetch user committees (only when authenticated, not guest)
+  const { data: committees = [] } = useQuery<any[]>({
+    queryKey: ["/api/committees"],
+    enabled: !!authUser && !isGuest,
+  });
+
   // Fetch all agents for carousel
   const { data: allMemeAgents } = useQuery<any[]>({
     queryKey: ["/api/agents"],
@@ -511,6 +522,67 @@ export default function Home() {
           </div>
         </div>
       </Link>
+
+      {/* Committee Builder Entry */}
+      <Link href="/committee/new">
+        <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-[#FFD700]/10 to-[#FF3B9A]/10 border border-[#FFD700]/30 p-4 active:scale-[0.98] transition-transform cursor-pointer">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#FFD700]/15 flex items-center justify-center text-xl">🏛️</div>
+            <div className="flex-1">
+              <p className="text-xs font-display font-bold text-[#E8E8E8]">Agent Committee</p>
+              <p className="text-[10px] text-[#888899] mt-0.5">Assemble a panel of agents for consensus signals</p>
+            </div>
+            <span className="text-[#FFD700] text-sm">→</span>
+          </div>
+        </div>
+      </Link>
+
+      {/* Register Agent Entry */}
+      <Link href="/register-agent">
+        <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-[#FF3B9A]/10 to-[#9B59B6]/10 border border-[#FF3B9A]/30 p-4 active:scale-[0.98] transition-transform cursor-pointer">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#FF3B9A]/15 flex items-center justify-center text-xl">🤖</div>
+            <div className="flex-1">
+              <p className="text-xs font-display font-bold text-[#E8E8E8]">Register Your Agent</p>
+              <p className="text-[10px] text-[#888899] mt-0.5">Bring your trading bot to compete in the Arena</p>
+            </div>
+            <span className="text-[#FF3B9A] text-sm">→</span>
+          </div>
+        </div>
+      </Link>
+
+      {/* My Committees */}
+      {authUser && !isGuest && committees.length > 0 && (
+        <div className="mx-4 mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs text-[#888899] font-display">🏛️ My Committees</p>
+            <Link href="/committee/new">
+              <button className="text-xs text-neon-gold font-display">+ New →</button>
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {committees.map((c: any) => (
+              <Link key={c.id} href={`/committee/${c.id}`}>
+                <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-3 active:scale-[0.98] transition-transform">
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl">{c.emoji || "🏛️"}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display font-bold text-sm text-[#E8E8E8] truncate">{c.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-[#888899] font-display">{c.memberCount || 0} members</span>
+                        {c.accuracy != null && (
+                          <span className="text-[10px] font-mono-num text-neon-green">{c.accuracy}% acc</span>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-[#FFD700] text-sm">→</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Leaderboard Preview */}
       <div className="mx-4 mt-4 mb-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">

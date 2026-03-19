@@ -19,6 +19,9 @@ import type {
   ForumReply, InsertForumReply,
   SignalExplanation, InsertSignalExplanation,
   GlassBoxSignal, GlassBoxAgentProfile, GlassBoxFactor, GlassBoxDecisionStep,
+  Committee, InsertCommittee,
+  CommitteeMember, InsertCommitteeMember,
+  CommitteeSignal, InsertCommitteeSignal,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -122,6 +125,19 @@ export interface IStorage {
   getSignalExplanationsByAgent(agentId: string, limit?: number): Promise<SignalExplanation[]>;
   getAllSignalExplanations(limit?: number): Promise<SignalExplanation[]>;
   createSignalExplanation(explanation: InsertSignalExplanation): Promise<SignalExplanation>;
+
+  // Committees
+  createCommittee(committee: InsertCommittee): Promise<Committee>;
+  getCommittee(id: number): Promise<Committee | undefined>;
+  getCommitteesByUser(userId: number): Promise<Committee[]>;
+  updateCommittee(id: number, data: Partial<Committee>): Promise<Committee | undefined>;
+  deleteCommittee(id: number): Promise<boolean>;
+  addCommitteeMember(member: InsertCommitteeMember): Promise<CommitteeMember>;
+  getCommitteeMembers(committeeId: number): Promise<CommitteeMember[]>;
+  removeCommitteeMember(committeeId: number, agentId: string): Promise<boolean>;
+  createCommitteeSignal(signal: InsertCommitteeSignal): Promise<CommitteeSignal>;
+  getCommitteeSignals(committeeId: number, limit?: number): Promise<CommitteeSignal[]>;
+  getAllCommitteeSignals(limit?: number): Promise<CommitteeSignal[]>;
 }
 
 // Seed data
@@ -1162,6 +1178,12 @@ export class MemStorage implements IStorage {
   private forumPostsData: ForumPost[] = [];
   private forumRepliesData: ForumReply[] = [];
   private signalExplanationsData: SignalExplanation[] = [];
+  private committeesMap: Map<number, Committee> = new Map();
+  private committeeMembersData: CommitteeMember[] = [];
+  private committeeSignalsData: CommitteeSignal[] = [];
+  private nextCommitteeId = 1;
+  private nextCommitteeMemberId = 1;
+  private nextCommitteeSignalId = 1;
   private nextExternalAgentId = 1;
   private nextForumPostId = 1;
   private nextForumReplyId = 1;
@@ -1910,6 +1932,99 @@ export class MemStorage implements IStorage {
     const newExplanation = { ...explanation, id } as SignalExplanation;
     this.signalExplanationsData.push(newExplanation);
     return newExplanation;
+  }
+
+  // ============================================================
+  // COMMITTEE methods
+  // ============================================================
+
+  async createCommittee(committee: InsertCommittee): Promise<Committee> {
+    const id = this.nextCommitteeId++;
+    const newCommittee: Committee = {
+      id,
+      totalSignals: 0,
+      accuracy: 0,
+      status: "active",
+      emoji: "🏛️",
+      description: null,
+      ...committee,
+    } as Committee;
+    this.committeesMap.set(id, newCommittee);
+    return newCommittee;
+  }
+
+  async getCommittee(id: number): Promise<Committee | undefined> {
+    return this.committeesMap.get(id);
+  }
+
+  async getCommitteesByUser(userId: number): Promise<Committee[]> {
+    return Array.from(this.committeesMap.values()).filter(c => c.userId === userId);
+  }
+
+  async updateCommittee(id: number, data: Partial<Committee>): Promise<Committee | undefined> {
+    const existing = this.committeesMap.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...data };
+    this.committeesMap.set(id, updated);
+    return updated;
+  }
+
+  async deleteCommittee(id: number): Promise<boolean> {
+    if (!this.committeesMap.has(id)) return false;
+    this.committeesMap.delete(id);
+    this.committeeMembersData = this.committeeMembersData.filter(m => m.committeeId !== id);
+    this.committeeSignalsData = this.committeeSignalsData.filter(s => s.committeeId !== id);
+    return true;
+  }
+
+  async addCommitteeMember(member: InsertCommitteeMember): Promise<CommitteeMember> {
+    const id = this.nextCommitteeMemberId++;
+    const newMember: CommitteeMember = { id, weight: 1, agentSource: "internal", ...member } as CommitteeMember;
+    this.committeeMembersData.push(newMember);
+    return newMember;
+  }
+
+  async getCommitteeMembers(committeeId: number): Promise<CommitteeMember[]> {
+    return this.committeeMembersData.filter(m => m.committeeId === committeeId);
+  }
+
+  async removeCommitteeMember(committeeId: number, agentId: string): Promise<boolean> {
+    const before = this.committeeMembersData.length;
+    this.committeeMembersData = this.committeeMembersData.filter(
+      m => !(m.committeeId === committeeId && m.agentId === agentId)
+    );
+    return this.committeeMembersData.length < before;
+  }
+
+  async createCommitteeSignal(signal: InsertCommitteeSignal): Promise<CommitteeSignal> {
+    const id = this.nextCommitteeSignalId++;
+    const newSignal: CommitteeSignal = {
+      id,
+      bullishVotes: 0,
+      bearishVotes: 0,
+      neutralVotes: 0,
+      agreement: 0,
+      isCorrect: null,
+      actualPrice: null,
+      pnlPercent: null,
+      resolvedAt: null,
+      ...signal,
+    } as CommitteeSignal;
+    this.committeeSignalsData.push(newSignal);
+    return newSignal;
+  }
+
+  async getCommitteeSignals(committeeId: number, limit = 50): Promise<CommitteeSignal[]> {
+    return this.committeeSignalsData
+      .filter(s => s.committeeId === committeeId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  async getAllCommitteeSignals(limit = 100): Promise<CommitteeSignal[]> {
+    return [...this.committeeSignalsData]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
   }
 }
 

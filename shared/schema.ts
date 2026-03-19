@@ -339,6 +339,92 @@ export const insertSignalExplanationSchema = createInsertSchema(signalExplanatio
 export type InsertSignalExplanation = z.infer<typeof insertSignalExplanationSchema>;
 export type SignalExplanation = typeof signalExplanations.$inferSelect;
 
+// ============================================================
+// COMMITTEES — user-assembled panels of agents that produce consensus signals
+// ============================================================
+
+export const committees = pgTable("committees", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(), // owner
+  name: text("name").notNull(), // "Alpha Council", etc.
+  emoji: text("emoji").notNull().default("🏛️"),
+  description: text("description"),
+  status: text("status").notNull().default("active"), // "active" | "paused"
+  totalSignals: integer("total_signals").notNull().default(0),
+  accuracy: real("accuracy").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertCommitteeSchema = createInsertSchema(committees).omit({ id: true });
+export type InsertCommittee = z.infer<typeof insertCommitteeSchema>;
+export type Committee = typeof committees.$inferSelect;
+
+// Committee Members — agents in each committee with custom weight
+export const committeeMembers = pgTable("committee_members", {
+  id: serial("id").primaryKey(),
+  committeeId: integer("committee_id").notNull(),
+  agentId: text("agent_id").notNull(), // hedgeFundAgent.agentId or externalAgent.agentId
+  agentSource: text("agent_source").notNull().default("internal"), // "internal" | "external"
+  weight: real("weight").notNull().default(1), // user-assigned weight (0.5 - 2.0)
+  addedAt: text("added_at").notNull(),
+});
+
+export const insertCommitteeMemberSchema = createInsertSchema(committeeMembers).omit({ id: true });
+export type InsertCommitteeMember = z.infer<typeof insertCommitteeMemberSchema>;
+export type CommitteeMember = typeof committeeMembers.$inferSelect;
+
+// Committee Signals — consensus outputs from a committee vote
+export const committeeSignals = pgTable("committee_signals", {
+  id: serial("id").primaryKey(),
+  committeeId: integer("committee_id").notNull(),
+  ticker: text("ticker").notNull(),
+  consensusSignal: text("consensus_signal").notNull(), // bullish | bearish | neutral
+  consensusConfidence: real("consensus_confidence").notNull(),
+  // Individual member votes (JSON array)
+  memberVotes: text("member_votes").notNull(), // JSON: [{agentId, signal, confidence, reasoning, weight}]
+  // Aggregated stats
+  bullishVotes: integer("bullish_votes").notNull().default(0),
+  bearishVotes: integer("bearish_votes").notNull().default(0),
+  neutralVotes: integer("neutral_votes").notNull().default(0),
+  agreement: real("agreement").notNull().default(0), // 0-100 how much agents agree
+  // Audit
+  isCorrect: boolean("is_correct"),
+  actualPrice: real("actual_price"),
+  pnlPercent: real("pnl_percent"),
+  createdAt: text("created_at").notNull(),
+  resolvedAt: text("resolved_at"),
+});
+
+export const insertCommitteeSignalSchema = createInsertSchema(committeeSignals).omit({ id: true });
+export type InsertCommitteeSignal = z.infer<typeof insertCommitteeSignalSchema>;
+export type CommitteeSignal = typeof committeeSignals.$inferSelect;
+
+// TypeScript types for Committee UI consumption
+export type CommitteeMemberVote = {
+  agentId: string;
+  agentName: string;
+  agentEmoji: string;
+  signal: string;
+  confidence: number;
+  reasoning: string;
+  weight: number;
+  weightedScore: number; // confidence * weight
+};
+
+export type CommitteeConsensus = {
+  committeeId: number;
+  committeeName: string;
+  ticker: string;
+  signal: string;
+  confidence: number;
+  agreement: number;
+  votes: CommitteeMemberVote[];
+  bullish: number;
+  bearish: number;
+  neutral: number;
+  createdAt: string;
+};
+
 // TypeScript types for Glass Box UI consumption
 export type GlassBoxFactor = {
   name: string;
