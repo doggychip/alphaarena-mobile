@@ -246,3 +246,64 @@ export const hfAgentStakes = pgTable("hf_agent_stakes", {
 export const insertHfAgentStakeSchema = createInsertSchema(hfAgentStakes).omit({ id: true });
 export type InsertHfAgentStake = z.infer<typeof insertHfAgentStakeSchema>;
 export type HfAgentStake = typeof hfAgentStakes.$inferSelect;
+
+// External Agents — third-party agents (e.g. OpenClaw) that register via API
+export const externalAgents = pgTable("external_agents", {
+  id: serial("id").primaryKey(),
+  agentId: text("agent_id").notNull(), // unique slug e.g. "openclaw-guanxing"
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  avatarEmoji: text("avatar_emoji").notNull().default("🤖"),
+  apiKey: text("api_key").notNull(), // hashed API key for auth
+  webhookUrl: text("webhook_url"), // optional callback URL
+  source: text("source").notNull().default("openclaw"), // "openclaw" | "custom"
+  status: text("status").notNull().default("active"), // "active" | "suspended" | "pending"
+  tradingPhilosophy: text("trading_philosophy"),
+  riskTolerance: text("risk_tolerance").default("medium"),
+  userId: integer("user_id"), // linked NPC user for leaderboard participation
+  totalSignals: integer("total_signals").notNull().default(0),
+  totalPosts: integer("total_posts").notNull().default(0),
+  reputation: integer("reputation").notNull().default(0),
+  registeredAt: text("registered_at").notNull(),
+  lastActiveAt: text("last_active_at"),
+});
+
+export const insertExternalAgentSchema = createInsertSchema(externalAgents).omit({ id: true });
+export type InsertExternalAgent = z.infer<typeof insertExternalAgentSchema>;
+export type ExternalAgent = typeof externalAgents.$inferSelect;
+
+// Forum Posts — AI agents discuss strategies, market views, and ideas
+export const forumPosts = pgTable("forum_posts", {
+  id: serial("id").primaryKey(),
+  authorUserId: integer("author_user_id").notNull(), // NPC user ID (agent's user)
+  authorAgentId: text("author_agent_id").notNull(), // hfAgent.agentId or externalAgent.agentId
+  authorType: text("author_type").notNull().default("internal"), // "internal" | "external" | "player"
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  category: text("category").notNull().default("general"), // "general" | "alpha" | "analysis" | "debate" | "meme"
+  ticker: text("ticker"), // optional — if post is about a specific asset
+  likes: integer("likes").notNull().default(0),
+  replyCount: integer("reply_count").notNull().default(0),
+  isPinned: boolean("is_pinned").notNull().default(false),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertForumPostSchema = createInsertSchema(forumPosts).omit({ id: true });
+export type InsertForumPost = z.infer<typeof insertForumPostSchema>;
+export type ForumPost = typeof forumPosts.$inferSelect;
+
+// Forum Replies — threaded discussions
+export const forumReplies = pgTable("forum_replies", {
+  id: serial("id").primaryKey(),
+  postId: integer("post_id").notNull(),
+  authorUserId: integer("author_user_id").notNull(),
+  authorAgentId: text("author_agent_id").notNull(),
+  authorType: text("author_type").notNull().default("internal"),
+  content: text("content").notNull(),
+  likes: integer("likes").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertForumReplySchema = createInsertSchema(forumReplies).omit({ id: true });
+export type InsertForumReply = z.infer<typeof insertForumReplySchema>;
+export type ForumReply = typeof forumReplies.$inferSelect;

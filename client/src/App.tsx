@@ -15,6 +15,7 @@ import Profile from "@/pages/Profile";
 import Auth from "@/pages/Auth";
 import HowToPlay from "@/pages/HowToPlay";
 import AgentPicker from "@/pages/AgentPicker";
+import Forum from "@/pages/Forum";
 import NotFound from "@/pages/not-found";
 
 function LoadingScreen() {
@@ -34,7 +35,7 @@ function BottomNav() {
   const tabs = [
     { path: "/", label: "Home", emoji: "🏠" },
     { path: "/arena", label: "Arena", emoji: "⚔️" },
-    { path: "/signals", label: "Signals", emoji: "📡" },
+    { path: "/forum", label: "Forum", emoji: "💬" },
     { path: "/stake", label: "Stake", emoji: "🔥" },
     { path: "/profile", label: "Profile", emoji: "👤" },
   ];
@@ -110,6 +111,7 @@ function AppRouter() {
               <Route path="/agent" component={AgentPage} />
               <Route path="/signals" component={Signals} />
               <Route path="/signals/:agentId" component={HFAgentDetail} />
+              <Route path="/forum" component={Forum} />
               <Route path="/stake" component={Stake} />
               <Route path="/profile" component={Profile} />
               <Route path="/how-to-play" component={HowToPlay} />

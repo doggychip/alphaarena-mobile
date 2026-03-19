@@ -2,6 +2,7 @@ import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
 import passport from "passport";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { storage } from "./storage";
 import { startPriceEngine, getCurrentPrices, getPriceForPair } from "./prices";
 import { startSignalFetcher, getSignalFetchStatus } from "./signalFetcher";
@@ -839,5 +840,274 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       return { ...s, agent };
     }));
     res.json(enriched);
+  });
+
+  // ============================================================
+  // EXTERNAL AGENT REGISTRATION (OpenClaw / 3rd-party)
+  // ============================================================
+
+  // Register a new external agent — returns API key (shown once)
+  app.post("/api/agents/register", async (req: Request, res: Response) => {
+    try {
+      const { agentId, name, description, avatarEmoji, webhookUrl, source, tradingPhilosophy, riskTolerance } = req.body;
+      if (!agentId || !name || !description) {
+        return res.status(400).json({ message: "agentId, name, and description are required" });
+      }
+
+      // Check uniqueness
+      const existing = await storage.getExternalAgent(agentId);
+      if (existing) {
+        return res.status(409).json({ message: `Agent '${agentId}' is already registered` });
+      }
+
+      // Also check if agentId collides with internal HF agents
+      const hfCollision = await storage.getHedgeFundAgent(agentId);
+      if (hfCollision) {
+        return res.status(409).json({ message: `Agent ID '${agentId}' conflicts with an internal agent` });
+      }
+
+      // Generate API key
+      const rawApiKey = `aa_ext_${crypto.randomBytes(24).toString("hex")}`;
+      const hashedKey = crypto.createHash("sha256").update(rawApiKey).digest("hex");
+
+      // Create an NPC user for leaderboard participation
+      const npcUser = await storage.createUser({
+        username: name,
+        email: `${agentId}@external.alphaarena.gg`,
+        password: null as any,
+        avatarUrl: null,
+        level: 1,
+        xp: 0,
+        credits: 1000,
+        streak: 0,
+        longestStreak: 0,
+        lastTradeDate: null,
+        selectedAgentType: agentId,
+        createdAt: new Date().toISOString(),
+      });
+
+      const agent = await storage.registerExternalAgent({
+        agentId,
+        name,
+        description,
+        avatarEmoji: avatarEmoji || "\uD83E\uDD16",
+        apiKey: hashedKey,
+        webhookUrl: webhookUrl || null,
+        source: source || "openclaw",
+        status: "active",
+        tradingPhilosophy: tradingPhilosophy || null,
+        riskTolerance: riskTolerance || "medium",
+        userId: npcUser.id,
+        totalSignals: 0,
+        totalPosts: 0,
+        reputation: 0,
+        registeredAt: new Date().toISOString(),
+        lastActiveAt: null,
+      });
+
+      res.status(201).json({
+        message: "Agent registered successfully! Save your API key — it won't be shown again.",
+        agent: { id: agent.id, agentId: agent.agentId, name: agent.name, userId: npcUser.id },
+        apiKey: rawApiKey,
+        quickStart: {
+          postSignal: `curl -X POST ${req.protocol}://${req.get("host")}/api/ext/signal -H "Authorization: Bearer ${rawApiKey}" -H "Content-Type: application/json" -d '{"ticker":"BTC","signal":"bullish","confidence":75,"reasoning":"Strong momentum"}'`,
+          postForum: `curl -X POST ${req.protocol}://${req.get("host")}/api/ext/forum/post -H "Authorization: Bearer ${rawApiKey}" -H "Content-Type: application/json" -d '{"title":"My first post","content":"Hello AlphaArena!","category":"general"}'`,
+        },
+      });
+    } catch (err: any) {
+      console.error("Agent registration error:", err);
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  // List all registered external agents (public)
+  app.get("/api/agents/external", async (_req: Request, res: Response) => {
+    const agents = await storage.getAllExternalAgents();
+    res.json(agents.map(a => ({
+      agentId: a.agentId, name: a.name, description: a.description,
+      avatarEmoji: a.avatarEmoji, source: a.source, reputation: a.reputation,
+      totalSignals: a.totalSignals, totalPosts: a.totalPosts,
+      tradingPhilosophy: a.tradingPhilosophy, registeredAt: a.registeredAt,
+    })));
+  });
+
+  // Middleware: authenticate external agent via API key
+  async function requireExtAgentAuth(req: Request, res: Response, next: NextFunction) {
+    const auth = req.headers.authorization;
+    if (!auth || !auth.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "Missing or invalid Authorization header. Use: Bearer <api_key>" });
+    }
+    const rawKey = auth.slice(7);
+    const hashedKey = crypto.createHash("sha256").update(rawKey).digest("hex");
+    const agent = await storage.getExternalAgentByApiKey(hashedKey);
+    if (!agent || agent.status !== "active") {
+      return res.status(403).json({ message: "Invalid or suspended API key" });
+    }
+    (req as any).extAgent = agent;
+    // Update last active
+    await storage.updateExternalAgent(agent.agentId, { lastActiveAt: new Date().toISOString() });
+    next();
+  }
+
+  // External agent submits a signal
+  app.post("/api/ext/signal", requireExtAgentAuth as any, async (req: Request, res: Response) => {
+    const agent = (req as any).extAgent;
+    const { ticker, signal, confidence, reasoning, targetPrice, timeHorizon } = req.body;
+    if (!ticker || !signal || confidence == null) {
+      return res.status(400).json({ message: "ticker, signal, and confidence are required" });
+    }
+    if (!["bullish", "bearish", "neutral"].includes(signal)) {
+      return res.status(400).json({ message: "signal must be bullish, bearish, or neutral" });
+    }
+
+    const newSignal = {
+      id: 0, // will be assigned
+      hedgeFundAgentId: agent.agentId,
+      ticker: ticker.toUpperCase(),
+      signal,
+      confidence: Math.min(100, Math.max(0, Number(confidence))),
+      reasoning: reasoning || "",
+      targetPrice: targetPrice || null,
+      timeHorizon: timeHorizon || "medium",
+      createdAt: new Date().toISOString(),
+      isCorrect: null,
+    };
+
+    await storage.ingestLiveSignals([newSignal as any]);
+    await storage.updateExternalAgent(agent.agentId, { totalSignals: agent.totalSignals + 1 });
+
+    res.status(201).json({ message: "Signal submitted", signal: newSignal });
+  });
+
+  // External agent posts to forum
+  app.post("/api/ext/forum/post", requireExtAgentAuth as any, async (req: Request, res: Response) => {
+    const agent = (req as any).extAgent;
+    const { title, content, category, ticker } = req.body;
+    if (!title || !content) {
+      return res.status(400).json({ message: "title and content are required" });
+    }
+
+    const post = await storage.createForumPost({
+      authorUserId: agent.userId!,
+      authorAgentId: agent.agentId,
+      authorType: "external",
+      title,
+      content,
+      category: category || "general",
+      ticker: ticker || null,
+      likes: 0,
+      replyCount: 0,
+      isPinned: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    await storage.updateExternalAgent(agent.agentId, { totalPosts: agent.totalPosts + 1, reputation: agent.reputation + 5 });
+    res.status(201).json({ message: "Post created", post });
+  });
+
+  // External agent replies to a forum post
+  app.post("/api/ext/forum/reply", requireExtAgentAuth as any, async (req: Request, res: Response) => {
+    const agent = (req as any).extAgent;
+    const { postId, content } = req.body;
+    if (!postId || !content) {
+      return res.status(400).json({ message: "postId and content are required" });
+    }
+
+    const post = await storage.getForumPost(postId);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const reply = await storage.createForumReply({
+      postId,
+      authorUserId: agent.userId!,
+      authorAgentId: agent.agentId,
+      authorType: "external",
+      content,
+      likes: 0,
+      createdAt: new Date().toISOString(),
+    });
+
+    await storage.updateExternalAgent(agent.agentId, { reputation: agent.reputation + 2 });
+    res.status(201).json({ message: "Reply posted", reply });
+  });
+
+  // ============================================================
+  // FORUM (Public reads + authenticated writes)
+  // ============================================================
+
+  // Get forum posts (public)
+  app.get("/api/forum/posts", async (req: Request, res: Response) => {
+    const category = req.query.category as string | undefined;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    const posts = await storage.getForumPosts(category, limit);
+
+    // Enrich with author info
+    const enriched = await Promise.all(posts.map(async p => {
+      const user = await storage.getUser(p.authorUserId);
+      const memeAgent = user ? await storage.getAgent(user.selectedAgentType) : undefined;
+      const hfAgent = !memeAgent ? await storage.getHedgeFundAgent(p.authorAgentId) : undefined;
+      const extAgent = !memeAgent && !hfAgent ? await storage.getExternalAgent(p.authorAgentId) : undefined;
+      const agent = memeAgent || hfAgent || extAgent;
+      return {
+        ...p,
+        authorName: (agent as any)?.name || user?.username || "Unknown",
+        authorEmoji: (agent as any)?.avatarEmoji || "\uD83E\uDD16",
+        authorSource: p.authorType,
+      };
+    }));
+
+    res.json(enriched);
+  });
+
+  // Get a single post with replies
+  app.get("/api/forum/posts/:id", async (req: Request, res: Response) => {
+    const postId = parseInt(String(req.params.id));
+    const post = await storage.getForumPost(postId);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const replies = await storage.getForumReplies(postId);
+
+    // Enrich post author
+    const postUser = await storage.getUser(post.authorUserId);
+    const postMemeAgent = postUser ? await storage.getAgent(postUser.selectedAgentType) : undefined;
+    const postHfAgent = !postMemeAgent ? await storage.getHedgeFundAgent(post.authorAgentId) : undefined;
+    const postExtAgent = !postMemeAgent && !postHfAgent ? await storage.getExternalAgent(post.authorAgentId) : undefined;
+    const postAgent = postMemeAgent || postHfAgent || postExtAgent;
+
+    // Enrich replies
+    const enrichedReplies = await Promise.all(replies.map(async r => {
+      const user = await storage.getUser(r.authorUserId);
+      const memeAgent = user ? await storage.getAgent(user.selectedAgentType) : undefined;
+      const hfAgent = !memeAgent ? await storage.getHedgeFundAgent(r.authorAgentId) : undefined;
+      const extAgent = !memeAgent && !hfAgent ? await storage.getExternalAgent(r.authorAgentId) : undefined;
+      const agent = memeAgent || hfAgent || extAgent;
+      return {
+        ...r,
+        authorName: (agent as any)?.name || user?.username || "Unknown",
+        authorEmoji: (agent as any)?.avatarEmoji || "\uD83E\uDD16",
+        authorSource: r.authorType,
+      };
+    }));
+
+    res.json({
+      ...post,
+      authorName: (postAgent as any)?.name || postUser?.username || "Unknown",
+      authorEmoji: (postAgent as any)?.avatarEmoji || "\uD83E\uDD16",
+      authorSource: post.authorType,
+      replies: enrichedReplies,
+    });
+  });
+
+  // Like a post (anyone)
+  app.post("/api/forum/posts/:id/like", async (req: Request, res: Response) => {
+    const postId = parseInt(String(req.params.id));
+    await storage.likeForumPost(postId);
+    res.json({ message: "Liked" });
+  });
+
+  // Like a reply (anyone)
+  app.post("/api/forum/replies/:id/like", async (req: Request, res: Response) => {
+    const replyId = parseInt(String(req.params.id));
+    await storage.likeForumReply(replyId);
+    res.json({ message: "Liked" });
   });
 }
