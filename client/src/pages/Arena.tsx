@@ -14,6 +14,39 @@ function getAgentTier(selectedAgentType: string): "meme" | "hf" {
   return MEME_AGENT_TYPES.has(selectedAgentType) ? "meme" : "hf";
 }
 
+// HF agent categories — personality field stores the category for HF agents
+const HF_CATEGORIES: Record<string, string> = {
+  persona: "persona",
+  specialist: "specialist",
+  management: "management",
+};
+
+function getAgentCategory(entry: any): string {
+  const agentType = entry.user?.selectedAgentType;
+  if (!agentType) return "meme";
+  if (MEME_AGENT_TYPES.has(agentType)) return "meme";
+  // For HF agents, personality = category
+  const cat = entry.agent?.personality;
+  if (cat && HF_CATEGORIES[cat]) return cat;
+  return "persona"; // fallback for HF
+}
+
+const CATEGORY_FILTERS = [
+  { id: "all", label: "All", emoji: "🌐" },
+  { id: "meme", label: "Meme", emoji: "🎭" },
+  { id: "persona", label: "Persona", emoji: "🏛️" },
+  { id: "specialist", label: "Specialist", emoji: "📊" },
+  { id: "management", label: "Mgmt", emoji: "👔" },
+];
+
+const SORT_OPTIONS = [
+  { id: "compositeScore", label: "Score", emoji: "⚡" },
+  { id: "totalReturn", label: "Return", emoji: "📈" },
+  { id: "sharpeRatio", label: "Sharpe", emoji: "📊" },
+  { id: "winRate", label: "Win %", emoji: "🎯" },
+  { id: "maxDrawdown", label: "Drawdown", emoji: "🛡️" },
+];
+
 function getLeague(rank: number) {
   if (rank <= 10) return LEAGUE_CONFIG[0];
   if (rank <= 50) return LEAGUE_CONFIG[1];
@@ -23,6 +56,9 @@ function getLeague(rank: number) {
 
 export default function Arena() {
   const [selectedLeague, setSelectedLeague] = useState("all");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [sortBy, setSortBy] = useState("compositeScore");
+  const [showRankingInfo, setShowRankingInfo] = useState(false);
   const [, navigate] = useLocation();
 
   function goToAgent(user: any) {
@@ -50,12 +86,27 @@ export default function Arena() {
   const totalEntries = entries.length;
 
   // Filter by league
-  const filteredEntries = selectedLeague === "all"
+  let filteredEntries = selectedLeague === "all"
     ? entries
     : entries.filter((e: any) => {
         const league = getLeague(e.rank);
         return league.id === selectedLeague;
       });
+
+  // Filter by agent category
+  if (selectedCategory !== "all") {
+    filteredEntries = filteredEntries.filter((e: any) => getAgentCategory(e) === selectedCategory);
+  }
+
+  // Sort entries
+  if (sortBy !== "compositeScore") {
+    filteredEntries = [...filteredEntries].sort((a: any, b: any) => {
+      if (sortBy === "maxDrawdown") {
+        return a.maxDrawdown - b.maxDrawdown; // lower is better
+      }
+      return b[sortBy] - a[sortBy]; // higher is better for others
+    });
+  }
 
   // Countdown to end
   const endDate = competition?.endDate ? new Date(competition.endDate) : null;
@@ -81,6 +132,38 @@ export default function Arena() {
         </div>
       </div>
 
+      {/* How Rankings Work */}
+      <div className="mx-4 mt-3">
+        <button
+          onClick={() => setShowRankingInfo(!showRankingInfo)}
+          className="w-full rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] px-4 py-2.5 flex items-center justify-between active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm">ℹ️</span>
+            <span className="font-display font-bold text-xs text-[#E8E8E8]">How Rankings Work</span>
+          </div>
+          <span className={`text-[#888899] text-xs transition-transform ${showRankingInfo ? "rotate-180" : ""}`}>▼</span>
+        </button>
+        {showRankingInfo && (
+          <div className="mt-1 rounded-2xl bg-[#12121A] border border-[#2A2A3E] p-4 space-y-3">
+            <p className="text-xs text-[#888899] leading-relaxed">
+              Rankings are based on a <span className="text-neon-cyan font-display font-bold">composite score</span> that rewards both performance and risk management:
+            </p>
+            <div className="space-y-2">
+              <ScoreFactorRow emoji="📈" label="Total Return" weight="40%" color="#00FF88" desc="Overall portfolio gain/loss" />
+              <ScoreFactorRow emoji="📊" label="Sharpe Ratio" weight="30%" color="#00D4FF" desc="Risk-adjusted return — higher = better returns per unit of risk" />
+              <ScoreFactorRow emoji="🎯" label="Win Rate" weight="20%" color="#FFD700" desc="% of profitable trades" />
+              <ScoreFactorRow emoji="🛡️" label="Max Drawdown" weight="10%" color="#FF3B9A" desc="Worst peak-to-trough loss — lower = better" />
+            </div>
+            <div className="rounded-xl bg-[#1A1A2E] border border-neon-cyan/20 p-3">
+              <p className="text-[10px] text-[#888899] leading-relaxed">
+                <span className="text-neon-cyan font-display font-bold">Why not just highest return?</span> Raw returns can come from risky bets. The composite score rewards agents that are both profitable <span className="text-neon-green">and</span> consistent. An agent with +10% return and low drawdown can outrank one with +25% return but wild swings.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Your Rank Card */}
       {myEntry && (
         <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
@@ -101,36 +184,94 @@ export default function Arena() {
         </div>
       )}
 
+      {/* Category Filter */}
+      <div className="mx-4 mt-4">
+        <p className="text-[10px] text-[#888899] font-display mb-1.5 uppercase tracking-wider">Agent Type</p>
+        <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
+          {CATEGORY_FILTERS.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-display font-bold transition-all ${
+                selectedCategory === cat.id
+                  ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/40"
+                  : "bg-[#1A1A2E] text-[#888899] border border-[#2A2A3E]"
+              }`}
+            >
+              {cat.emoji} {cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Sort By */}
+      <div className="mx-4 mt-3">
+        <p className="text-[10px] text-[#888899] font-display mb-1.5 uppercase tracking-wider">Sort By</p>
+        <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
+          {SORT_OPTIONS.map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => setSortBy(opt.id)}
+              className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-display font-bold transition-all ${
+                sortBy === opt.id
+                  ? "bg-neon-green/15 text-neon-green border border-neon-green/40"
+                  : "bg-[#1A1A2E] text-[#888899] border border-[#2A2A3E]"
+              }`}
+            >
+              {opt.emoji} {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* League Selector */}
-      <div className="mx-4 mt-4 flex gap-2 overflow-x-auto hide-scrollbar">
-        <button
-          onClick={() => setSelectedLeague("all")}
-          className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-display font-bold transition-all ${
-            selectedLeague === "all"
-              ? "bg-neon-green/20 text-neon-green border border-neon-green/40"
-              : "bg-[#1A1A2E] text-[#888899] border border-[#2A2A3E]"
-          }`}
-        >
-          🌐 All
-        </button>
-        {LEAGUE_CONFIG.map(league => (
+      <div className="mx-4 mt-3">
+        <p className="text-[10px] text-[#888899] font-display mb-1.5 uppercase tracking-wider">League</p>
+        <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
           <button
-            key={league.id}
-            onClick={() => setSelectedLeague(league.id)}
-            className={`flex-shrink-0 px-3 py-2 rounded-xl text-xs font-display font-bold transition-all ${
-              selectedLeague === league.id
-                ? "bg-[#1A1A2E] border-2"
+            onClick={() => setSelectedLeague("all")}
+            className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-display font-bold transition-all ${
+              selectedLeague === "all"
+                ? "bg-neon-green/20 text-neon-green border border-neon-green/40"
                 : "bg-[#1A1A2E] text-[#888899] border border-[#2A2A3E]"
             }`}
-            style={selectedLeague === league.id ? { borderColor: league.color, color: league.color } : {}}
           >
-            {league.label}
+            🌐 All
           </button>
-        ))}
+          {LEAGUE_CONFIG.map(league => (
+            <button
+              key={league.id}
+              onClick={() => setSelectedLeague(league.id)}
+              className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-display font-bold transition-all ${
+                selectedLeague === league.id
+                  ? "bg-[#1A1A2E] border-2"
+                  : "bg-[#1A1A2E] text-[#888899] border border-[#2A2A3E]"
+              }`}
+              style={selectedLeague === league.id ? { borderColor: league.color, color: league.color } : {}}
+            >
+              {league.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Result Count */}
+      <div className="mx-4 mt-3 flex items-center justify-between">
+        <span className="text-[10px] text-[#888899] font-mono-num">
+          {filteredEntries.length} agent{filteredEntries.length !== 1 ? "s" : ""}
+        </span>
+        {(selectedCategory !== "all" || sortBy !== "compositeScore" || selectedLeague !== "all") && (
+          <button
+            onClick={() => { setSelectedCategory("all"); setSortBy("compositeScore"); setSelectedLeague("all"); }}
+            className="text-[10px] text-neon-cyan font-display active:opacity-60"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* Daily Challenge */}
-      <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-neon-gold/10 to-[#1A1A2E] border border-neon-gold/30 p-4">
+      <div className="mx-4 mt-3 rounded-2xl bg-gradient-to-r from-neon-gold/10 to-[#1A1A2E] border border-neon-gold/30 p-4">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-lg">🎯</span>
           <span className="font-display font-bold text-sm text-neon-gold">Daily Challenge</span>
@@ -144,12 +285,20 @@ export default function Arena() {
 
       {/* Leaderboard List */}
       <div className="mx-4 mt-4 space-y-2 mb-4">
+        {filteredEntries.length === 0 && (
+          <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-6 text-center">
+            <span className="text-2xl">🔍</span>
+            <p className="text-sm text-[#888899] mt-2 font-display">No agents found</p>
+            <p className="text-[10px] text-[#555566] mt-1">Try adjusting your filters</p>
+          </div>
+        )}
         {filteredEntries.map((entry: any) => {
           const league = getLeague(entry.rank);
           const isMe = entry.userId === 1;
           const staked = stakedMap.get(entry.userId) || 0;
           const isHeavilyStaked = staked >= 1000;
           const tier = entry.user?.selectedAgentType ? getAgentTier(entry.user.selectedAgentType) : "meme";
+          const category = getAgentCategory(entry);
           return (
             <div
               key={entry.userId}
@@ -188,7 +337,7 @@ export default function Arena() {
                     Sharpe {entry.sharpeRatio.toFixed(2)}
                   </span>
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A3E] text-[#888899]">
-                    {entry.agent?.tradingStyle?.split("/")[0]}
+                    {tier === "hf" ? category : entry.agent?.tradingStyle?.split("/")[0]}
                   </span>
                   {staked > 0 && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-neon-gold/10 text-neon-gold font-mono-num">
@@ -229,6 +378,23 @@ function StatBar({ label, value, max, color, suffix = "", inverted = false }: {
       <span className="font-mono-num text-[10px] w-12 text-right" style={{ color }}>
         {inverted ? "" : (value >= 0 ? "" : "")}{value.toFixed(1)}{suffix}
       </span>
+    </div>
+  );
+}
+
+function ScoreFactorRow({ emoji, label, weight, color, desc }: {
+  emoji: string; label: string; weight: string; color: string; desc: string;
+}) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-sm mt-0.5">{emoji}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <span className="font-display font-bold text-xs text-[#E8E8E8]">{label}</span>
+          <span className="font-mono-num text-xs font-bold" style={{ color }}>{weight}</span>
+        </div>
+        <p className="text-[10px] text-[#888899] leading-relaxed">{desc}</p>
+      </div>
     </div>
   );
 }
