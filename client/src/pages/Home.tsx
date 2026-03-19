@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
 import TradeModal from "@/components/TradeModal";
 import NotificationPanel, { useUnreadCount } from "@/components/NotificationPanel";
@@ -53,6 +53,187 @@ function PriceTicker({ prices }: { prices: any[] }) {
   );
 }
 
+interface AgentCarouselProps {
+  currentAgent: any;
+  agentTier: "meme" | "hedge_fund";
+  isHF: boolean;
+  agentMsg: any;
+  displayPnl: number;
+  user: any;
+  allMemeAgents: any[];
+  allHfAgents: any[];
+}
+
+function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, user, allMemeAgents, allHfAgents }: AgentCarouselProps) {
+  // Build combined agent list: current agent first, then others
+  const allAgents = useRef<{ agent: any; tier: "meme" | "hedge_fund" }[]>([]);
+
+  useEffect(() => {
+    const combined: { agent: any; tier: "meme" | "hedge_fund" }[] = [];
+    // Current agent always first
+    combined.push({ agent: currentAgent, tier: agentTier });
+    // Add meme agents (skip current)
+    for (const a of allMemeAgents) {
+      if (a.id !== currentAgent.id || agentTier !== "meme") {
+        combined.push({ agent: a, tier: "meme" });
+      }
+    }
+    // Add HF agents (skip current)
+    for (const a of allHfAgents) {
+      const isCurrent = agentTier === "hedge_fund" && (a.agentId === currentAgent.agentId || a.id === currentAgent.id);
+      if (!isCurrent) {
+        combined.push({ agent: a, tier: "hedge_fund" });
+      }
+    }
+    allAgents.current = combined;
+  }, [currentAgent, agentTier, allMemeAgents, allHfAgents]);
+
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const totalAgents = allAgents.current.length || 1;
+
+  const goToNext = useCallback(() => {
+    if (allAgents.current.length <= 1) return;
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setActiveIndex(prev => (prev + 1) % allAgents.current.length);
+      setIsTransitioning(false);
+    }, 300);
+  }, []);
+
+  useEffect(() => {
+    if (isPaused || allAgents.current.length <= 1) return;
+    timerRef.current = setInterval(goToNext, 4000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isPaused, goToNext, allMemeAgents, allHfAgents]);
+
+  // Pause on touch
+  const handleTouchStart = () => setIsPaused(true);
+  const handleTouchEnd = () => {
+    setTimeout(() => setIsPaused(false), 2000);
+  };
+
+  const displayed = allAgents.current[activeIndex] || { agent: currentAgent, tier: agentTier };
+  const dAgent = displayed.agent;
+  const dTier = displayed.tier;
+  const dIsHF = dTier === "hedge_fund";
+  const isCurrentAgent = activeIndex === 0;
+
+  return (
+    <Link href="/pick-agent">
+      <div
+        className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4 cursor-pointer active:scale-[0.98] transition-transform"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+      >
+        <div
+          className={`transition-all duration-300 ease-in-out ${
+            isTransitioning ? "opacity-0 translate-x-4" : "opacity-100 translate-x-0"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-16 h-16 rounded-full bg-[#0A0A0F] border-2 border-neon-cyan/50 flex items-center justify-center text-3xl animate-bounce-gentle">
+              {dAgent.avatarEmoji}
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="font-display font-bold text-[#E8E8E8]">{dAgent.name}</span>
+                <TierBadge tier={dTier} />
+                {isCurrentAgent && (
+                  <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-green/15 text-neon-green border border-neon-green/30 font-display font-bold">ACTIVE</span>
+                )}
+              </div>
+              {dIsHF ? (
+                <p className="text-[10px] text-[#888899] mt-1 line-clamp-2">{dAgent.tradingPhilosophy || dAgent.description}</p>
+              ) : (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">
+                  {dAgent.personality || dAgent.tradingStyle}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Speech Bubble — only for current agent */}
+          {isCurrentAgent && (
+            <div className="mt-3 relative bg-[#1E1E32] rounded-xl px-4 py-3 speech-bubble">
+              <p className="text-sm text-[#E8E8E8] leading-relaxed">
+                {agentMsg?.message || dAgent.description}
+              </p>
+            </div>
+          )}
+
+          {/* Description for non-current agents */}
+          {!isCurrentAgent && (
+            <div className="mt-3 relative bg-[#1E1E32] rounded-xl px-4 py-3">
+              <p className="text-xs text-[#888899] leading-relaxed line-clamp-2">
+                {dAgent.description}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom row: PnL + Follow for current, or CTA for others */}
+        {isCurrentAgent ? (
+          <div className="mt-3 flex items-center justify-between">
+            <span className={`font-mono-num text-lg font-bold ${displayPnl >= 0 ? "text-neon-green text-glow-green" : "text-neon-pink text-glow-pink"}`}>
+              {displayPnl >= 0 ? "+" : "-"}${Math.abs(displayPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })} today {displayPnl >= 0 ? "\ud83d\udd25" : "\ud83d\udcc9"}
+            </span>
+            {isHF ? (
+              <Link href={`/signals/${user?.selectedAgentType}`}>
+                <button
+                  data-testid="btn-follow-agent"
+                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Follow Agent's Play
+                </button>
+              </Link>
+            ) : (
+              <Link href="/agent">
+                <button
+                  data-testid="btn-follow-agent"
+                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Follow Agent's Play
+                </button>
+              </Link>
+            )}
+          </div>
+        ) : (
+          <div className="mt-3 flex items-center justify-center">
+            <span className="text-xs text-neon-cyan font-display font-bold">Tap to explore this agent →</span>
+          </div>
+        )}
+
+        {/* Carousel dots */}
+        <div className="mt-3 flex items-center justify-center gap-1">
+          {Array.from({ length: Math.min(totalAgents, 12) }).map((_, i) => (
+            <div
+              key={i}
+              className={`rounded-full transition-all duration-300 ${
+                i === activeIndex % Math.min(totalAgents, 12)
+                  ? "w-4 h-1.5 bg-neon-cyan"
+                  : "w-1.5 h-1.5 bg-[#2A2A3E]"
+              }`}
+            />
+          ))}
+          {totalAgents > 12 && (
+            <span className="text-[8px] text-[#555566] ml-1">+{totalAgents - 12}</span>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 export default function Home() {
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [tradeMode, setTradeMode] = useState<"buy" | "sell">("buy");
@@ -93,6 +274,14 @@ export default function Home() {
       return res.json();
     },
     enabled: !!meData?.user?.selectedAgentType && !isHF,
+  });
+
+  // Fetch all agents for carousel
+  const { data: allMemeAgents } = useQuery<any[]>({
+    queryKey: ["/api/agents"],
+  });
+  const { data: allHfAgents } = useQuery<any[]>({
+    queryKey: ["/api/hf-agents"],
   });
 
   const user = meData?.user;
@@ -186,67 +375,18 @@ export default function Home() {
         </Link>
       )}
 
-      {/* Agent Card */}
+      {/* Agent Carousel */}
       {agent && (
-        <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
-          <div className="flex items-start gap-3">
-            <Link href="/pick-agent">
-              <div className="w-16 h-16 rounded-full bg-[#0A0A0F] border-2 border-neon-cyan/50 flex items-center justify-center text-3xl animate-bounce-gentle relative cursor-pointer">
-                {agent.avatarEmoji}
-                <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#1A1A2E] border border-neon-cyan/40 flex items-center justify-center">
-                  <span className="text-[8px]">🔄</span>
-                </div>
-              </div>
-            </Link>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-display font-bold text-[#E8E8E8]">{agent.name}</span>
-                <TierBadge tier={agentTier} />
-              </div>
-              {isHF ? (
-                <p className="text-[10px] text-[#888899] mt-1 line-clamp-2">{agent.tradingPhilosophy}</p>
-              ) : (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">
-                  {agent.personality}
-                </span>
-              )}
-              <Link href="/pick-agent">
-                <span className="text-[10px] text-neon-cyan font-display mt-1 inline-block cursor-pointer">Switch Agent →</span>
-              </Link>
-            </div>
-          </div>
-          {/* Speech Bubble */}
-          <div className="mt-3 relative bg-[#1E1E32] rounded-xl px-4 py-3 speech-bubble">
-            <p className="text-sm text-[#E8E8E8] leading-relaxed">
-              {agentMsg?.message || agent.description}
-            </p>
-          </div>
-          {/* Agent PnL */}
-          <div className="mt-3 flex items-center justify-between">
-            <span className={`font-mono-num text-lg font-bold ${displayPnl >= 0 ? "text-neon-green text-glow-green" : "text-neon-pink text-glow-pink"}`}>
-              {displayPnl >= 0 ? "+" : "-"}${Math.abs(displayPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })} today {displayPnl >= 0 ? "🔥" : "📉"}
-            </span>
-            {isHF ? (
-              <Link href={`/signals/${user?.selectedAgentType}`}>
-                <button
-                  data-testid="btn-follow-agent"
-                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
-                >
-                  Follow Agent's Play
-                </button>
-              </Link>
-            ) : (
-              <Link href={`/agent`}>
-                <button
-                  data-testid="btn-follow-agent"
-                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
-                >
-                  Follow Agent's Play
-                </button>
-              </Link>
-            )}
-          </div>
-        </div>
+        <AgentCarousel
+          currentAgent={agent}
+          agentTier={agentTier}
+          isHF={isHF}
+          agentMsg={agentMsg}
+          displayPnl={displayPnl}
+          user={user}
+          allMemeAgents={allMemeAgents || []}
+          allHfAgents={allHfAgents || []}
+        />
       )}
 
       {/* Powered By HF Agents — Only show for Meme agents */}
