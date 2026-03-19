@@ -319,8 +319,28 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
             )}
           </div>
         ) : (
-          <div className="mt-3 flex items-center justify-center">
-            <span className="text-xs text-neon-cyan font-display font-bold">Tap to explore this agent →</span>
+          <div className="mt-3 flex items-center justify-end">
+            {dIsHF ? (
+              <Link href={`/signals/${dAgent.agentId}`}>
+                <button
+                  data-testid="btn-view-signals-other"
+                  className="px-4 py-2 rounded-xl bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30 font-display font-bold text-sm active:scale-95 transition-transform"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  View Signals
+                </button>
+              </Link>
+            ) : (
+              <Link href="/agent">
+                <button
+                  data-testid="btn-view-signals-other"
+                  className="px-4 py-2 rounded-xl bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30 font-display font-bold text-sm active:scale-95 transition-transform"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  View Signals
+                </button>
+              </Link>
+            )}
           </div>
         )}
 
