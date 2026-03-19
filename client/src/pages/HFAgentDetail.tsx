@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import InfoTooltip from "@/components/InfoTooltip";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 function StatsExplainer({ stats, correct, incorrect, resolved }: { stats: any; correct: number; incorrect: number; resolved: number }) {
   const [open, setOpen] = useState(false);
@@ -129,7 +131,10 @@ function StatBox({ label, value, color }: { label: string; value: string; color:
 export default function HFAgentDetail() {
   const [, params] = useRoute("/signals/:agentId");
   const agentId = params?.agentId;
+  const [, navigate] = useLocation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const { user: authUser } = useAuth();
   const [stakeAmount, setStakeAmount] = useState(100);
   const [staking, setStaking] = useState(false);
 
@@ -147,14 +152,21 @@ export default function HFAgentDetail() {
   const stats = data?.stats;
 
   const handleStake = async () => {
+    if (!authUser) {
+      toast({ title: "Login Required", description: "Please login to stake on agents", variant: "destructive" });
+      navigate("/auth");
+      return;
+    }
     if (staking) return;
     setStaking(true);
     try {
-      await apiRequest("POST", "/api/staking/stake-agent", { hedgeFundAgentId: agentId, amount: stakeAmount });
+      const res = await apiRequest("POST", "/api/staking/stake-agent", { hedgeFundAgentId: agentId, amount: stakeAmount });
+      const data = await res.json();
+      toast({ title: "Staked!", description: `${stakeAmount} credits on ${data.agent || agent?.name}` });
       queryClient.invalidateQueries({ queryKey: ["/api/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staking/agent-stakes"] });
-    } catch {
-      // ignore
+    } catch (err: any) {
+      toast({ title: "Stake Failed", description: err.message || "Something went wrong", variant: "destructive" });
     }
     setStaking(false);
   };
