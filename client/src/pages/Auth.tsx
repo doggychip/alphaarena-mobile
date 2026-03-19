@@ -13,11 +13,13 @@ export default function Auth() {
   const { login, register } = useAuth();
   const [, navigate] = useLocation();
 
+  const [activeTab, setActiveTab] = useState("login");
   const [loginUsername, setLoginUsername] = useState(() => localStorage.getItem("alphaarena_username") || "");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem("alphaarena_username"));
+  const [showAccountNotFound, setShowAccountNotFound] = useState(false);
 
   const [regUsername, setRegUsername] = useState("");
   const [regEmail, setRegEmail] = useState("");
@@ -38,7 +40,12 @@ export default function Auth() {
       }
       navigate("/");
     } catch (err: any) {
-      setLoginError(err?.message || "Invalid username or password.");
+      const msg = err?.message || "Invalid username or password.";
+      setLoginError(msg);
+      // If account not found, show the register prompt
+      if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("register")) {
+        setShowAccountNotFound(true);
+      }
     } finally {
       setLoginLoading(false);
     }
@@ -109,7 +116,7 @@ export default function Auth() {
         style={{ background: "rgba(20, 20, 31, 0.95)", backdropFilter: "blur(20px)" }}
       >
         <CardContent className="pt-5 px-5 pb-5">
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setLoginError(""); setRegError(""); setShowAccountNotFound(false); }} className="w-full">
             <TabsList className="w-full mb-5 bg-[#0A0A0F] border border-[#2A2A3E] p-0.5 rounded-xl h-10">
               <TabsTrigger
                 value="login"
@@ -175,6 +182,21 @@ export default function Auth() {
                   <div className="rounded-lg border border-[#FF3B9A]/30 bg-[#FF3B9A]/10 px-3 py-2 text-xs text-[#FF3B9A] font-display">
                     ⚠️ {loginError}
                   </div>
+                )}
+
+                {showAccountNotFound && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("register");
+                      setRegUsername(loginUsername);
+                      setShowAccountNotFound(false);
+                      setLoginError("");
+                    }}
+                    className="w-full text-center text-xs text-neon-cyan hover:text-neon-green transition-colors font-display py-2 rounded-xl border border-neon-cyan/30 hover:border-neon-green/30 bg-neon-cyan/5"
+                  >
+                    🚀 Create a new account as "{loginUsername}" →
+                  </button>
                 )}
 
                 <Button
