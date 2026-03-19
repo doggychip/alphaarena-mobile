@@ -861,10 +861,26 @@ function generateSeedData() {
   const equityTickers = ["AAPL", "GOOGL", "MSFT", "NVDA", "TSLA"];
   const allTickers = [...cryptoTickers, ...equityTickers];
 
-  const basePrices: Record<string, number> = {
-    BTC: 87420, ETH: 3180, SOL: 148, BNB: 580, XRP: 0.62, ADA: 0.45, DOGE: 0.165, AVAX: 36, DOT: 7.5, LINK: 15.2,
-    AAPL: 178, GOOGL: 142, MSFT: 415, NVDA: 880, TSLA: 175,
+  // Use live prices from the price engine if available, else realistic fallbacks
+  const livePriceData = (() => {
+    try {
+      const { getCurrentPrices } = require("./prices");
+      const { prices } = getCurrentPrices();
+      const map: Record<string, number> = {};
+      for (const p of prices) {
+        const ticker = p.pair.split("/")[0];
+        map[ticker] = p.price;
+      }
+      return map;
+    } catch { return {}; }
+  })();
+
+  // Fallback prices aligned with live CoinGecko data as of March 2026
+  const fallbackPrices: Record<string, number> = {
+    BTC: 70850, ETH: 2196, SOL: 90, BNB: 650, XRP: 1.47, ADA: 0.27, DOGE: 0.095, AVAX: 9.60, DOT: 1.55, LINK: 9.20,
+    AAPL: 230, GOOGL: 170, MSFT: 395, NVDA: 115, TSLA: 250,
   };
+  const basePrices: Record<string, number> = { ...fallbackPrices, ...livePriceData };
 
   // Agent-specific signal biases
   const bullishSkew = new Set(["cathie_wood", "stanley_druckenmiller", "rakesh_jhunjhunwala", "growth_agent"]);
@@ -938,8 +954,13 @@ function generateSeedData() {
 
         const confidence = 40 + Math.floor(Math.random() * 56); // 40-95
         const base = basePrices[ticker] || 100;
-        const pctMove = (signal === "bullish" ? 1 : signal === "bearish" ? -1 : 0) * (5 + Math.random() * 20) / 100;
-        const targetPrice = Math.round(base * (1 + pctMove) * 100) / 100;
+        // Tighter, realistic target spreads: 2-8% for stocks/crypto
+        const pctMove = (signal === "bullish" ? 1 : signal === "bearish" ? -1 : 0) * (2 + Math.random() * 6) / 100;
+        const rawTarget = base * (1 + pctMove);
+        // Round appropriately based on price magnitude
+        const targetPrice = base >= 1000 ? Math.round(rawTarget) :
+                            base >= 1 ? Math.round(rawTarget * 100) / 100 :
+                            Math.round(rawTarget * 10000) / 10000;
 
         const hoursAgo = Math.floor(Math.random() * 7 * 24);
         const createdAt = new Date(now.getTime() - hoursAgo * 3600000).toISOString();

@@ -15,18 +15,18 @@ const COINGECKO_ID_MAP: Record<string, string> = {
 const COINGECKO_IDS = Object.keys(COINGECKO_ID_MAP).join(",");
 const COINGECKO_URL = `https://api.coingecko.com/api/v3/simple/price?ids=${COINGECKO_IDS}&vs_currencies=usd&include_24hr_change=true`;
 
-// Fallback simulated prices
+// Fallback simulated prices (aligned with CoinGecko March 2026)
 const basePrices: Record<string, number> = {
-  "BTC/USD": 87420,
-  "ETH/USD": 3180,
-  "BNB/USD": 625,
-  "SOL/USD": 148,
-  "XRP/USD": 2.45,
-  "ADA/USD": 0.72,
-  "DOGE/USD": 0.165,
-  "AVAX/USD": 38.5,
-  "DOT/USD": 7.82,
-  "LINK/USD": 16.4,
+  "BTC/USD": 70850,
+  "ETH/USD": 2196,
+  "BNB/USD": 650,
+  "SOL/USD": 90,
+  "XRP/USD": 1.47,
+  "ADA/USD": 0.27,
+  "DOGE/USD": 0.095,
+  "AVAX/USD": 9.60,
+  "DOT/USD": 1.55,
+  "LINK/USD": 9.20,
 };
 
 // Pair emojis for the ticker
