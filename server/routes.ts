@@ -208,6 +208,147 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   });
 
   // ============================================================
+  // AGENT CHAT
+  // ============================================================
+
+  app.post("/api/agent/chat", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const user = await storage.getUser(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const { message } = req.body;
+    if (!message || typeof message !== "string") {
+      return res.status(400).json({ message: "Message required" });
+    }
+
+    const memeAgent = await storage.getAgent(user.selectedAgentType);
+    const hfAgent = !memeAgent ? await storage.getHedgeFundAgent(user.selectedAgentType) : null;
+    const agent = memeAgent || hfAgent;
+    const isMeme = !!memeAgent;
+
+    // Get latest signals for context
+    let signals: any[] = [];
+    if (hfAgent) {
+      signals = await storage.getSignalsByAgent(hfAgent.agentId, 10);
+    } else if (memeAgent) {
+      // Get signals from mapped HF agents
+      const mappings = await storage.getMemeAgentMapping(user.selectedAgentType);
+      for (const m of mappings.slice(0, 3)) {
+        const sigs = await storage.getSignalsByAgent(m.hedgeFundAgentId, 3);
+        signals.push(...sigs);
+      }
+    }
+
+    // Get prices
+    const { prices } = getCurrentPrices();
+    const portfolio = await storage.getPortfolio(userId);
+    const positions = await storage.getPositions(userId);
+    const lowerMsg = message.toLowerCase();
+
+    // Detect intent
+    const tickerMention = [...(prices || []).map((p: any) => p.pair.split("/")[0])]
+      .find(t => lowerMsg.includes(t.toLowerCase()));
+    const isPortfolioQ = /portfolio|position|holding|balance|equity|pnl|p&l|my money/i.test(lowerMsg);
+    const isMarketQ = /market|outlook|today|bull|bear|trend|how.*look|what.*think/i.test(lowerMsg);
+    const isTickerQ = !!tickerMention;
+    const isStrategyQ = /strateg|should i|buy|sell|advice|recommend|what.*do|when|how.*trade/i.test(lowerMsg);
+    const isRiskQ = /risk|safe|danger|careful|protect|hedge|stop.?loss/i.test(lowerMsg);
+    const isGreeting = /^(hi|hey|hello|sup|yo|gm|good morning|what'?s up)/i.test(lowerMsg);
+
+    const agentName = agent?.name || "Agent";
+    const agentEmoji = (agent as any)?.avatarEmoji || "🤖";
+    const personality = isMeme ? (agent as any)?.personality || "" : "";
+    const isAggressive = /aggressive|high/i.test(personality + ((hfAgent as any)?.riskTolerance || ""));
+    const isCautious = /cautious|conservative|low/i.test(personality + ((hfAgent as any)?.riskTolerance || ""));
+
+    // Find relevant signals
+    const tickerSignals = tickerMention
+      ? signals.filter((s: any) => s.ticker.toUpperCase() === tickerMention.toUpperCase()).slice(0, 3)
+      : [];
+    const bullishSignals = signals.filter((s: any) => s.signal === "bullish");
+    const bearishSignals = signals.filter((s: any) => s.signal === "bearish");
+
+    // Find price data for mentioned ticker
+    const tickerPrice = tickerMention
+      ? (prices || []).find((p: any) => p.pair.split("/")[0].toUpperCase() === tickerMention.toUpperCase())
+      : null;
+
+    let reply = "";
+
+    if (isGreeting) {
+      const greetings = isMeme ? [
+        `Yo! ${agentEmoji} ${agentName} here. Markets are moving, what do you wanna know?`,
+        `GM! Ready to make some plays today? Ask me about any ticker or the market vibe.`,
+        `Hey! I've been watching the charts all day. What's on your mind?`,
+      ] : [
+        `Good to see you. I've been analyzing the markets. What would you like to discuss?`,
+        `Hello. I have some insights on current market conditions. What area are you interested in?`,
+        `Welcome back. I've been monitoring several assets. Ask me about any specific ticker or my current outlook.`,
+      ];
+      reply = greetings[Math.floor(Math.random() * greetings.length)];
+    } else if (isTickerQ && tickerPrice) {
+      const price = tickerPrice;
+      const change = price.change24h;
+      const direction = change >= 0 ? "up" : "down";
+      const sig = tickerSignals[0];
+
+      if (sig) {
+        const confLabel = sig.confidence >= 75 ? "high confidence" : sig.confidence >= 55 ? "moderate confidence" : "low confidence";
+        let reasoning = "";
+        try { reasoning = JSON.parse(sig.reasoning).summary; } catch { reasoning = sig.reasoning; }
+
+        reply = isMeme
+          ? `${tickerMention.toUpperCase()} is ${direction} ${Math.abs(change).toFixed(1)}% today at $${price.price < 1 ? price.price.toFixed(4) : price.price.toLocaleString()}. My take? ${sig.signal.toUpperCase()} with ${sig.confidence}% confidence (${confLabel}). ${reasoning ? reasoning : ""} ${sig.signal === "bullish" ? "Could be a good entry 🚀" : sig.signal === "bearish" ? "I'd be careful here 📉" : "Waiting for a clearer setup ⏳"}`
+          : `${tickerMention.toUpperCase()} — currently $${price.price < 1 ? price.price.toFixed(4) : price.price.toLocaleString()}, ${direction} ${Math.abs(change).toFixed(1)}% in 24h.\n\nMy analysis: ${sig.signal.toUpperCase()} at ${sig.confidence}% confidence.${sig.targetPrice ? ` Target: $${sig.targetPrice < 1 ? sig.targetPrice.toFixed(4) : sig.targetPrice.toLocaleString()}.` : ""}${reasoning ? ` ${reasoning}` : ""}\n\nThis is a ${confLabel} call based on my ${(hfAgent as any)?.category || ""} analysis.`;
+      } else {
+        reply = isMeme
+          ? `${tickerMention.toUpperCase()} is trading at $${price.price < 1 ? price.price.toFixed(4) : price.price.toLocaleString()}, ${direction} ${Math.abs(change).toFixed(1)}% today. I don't have a strong signal on this one right now. Check back later or look at my other picks! 👀`
+          : `${tickerMention.toUpperCase()} is at $${price.price < 1 ? price.price.toFixed(4) : price.price.toLocaleString()}, ${direction} ${Math.abs(change).toFixed(1)}% over 24h. I don't have an active signal on this asset currently. I'll update my analysis when I see a clearer setup.`;
+      }
+    } else if (isPortfolioQ) {
+      const equity = portfolio?.totalEquity || 100000;
+      const posCount = positions?.length || 0;
+      const pnl = equity - 100000;
+      reply = isMeme
+        ? `Your portfolio: $${equity.toLocaleString()} ${pnl >= 0 ? "📈" : "📉"} (${pnl >= 0 ? "+" : ""}${((pnl / 100000) * 100).toFixed(1)}%). You've got ${posCount} position${posCount !== 1 ? "s" : ""} open. ${pnl >= 0 ? "We're vibing! Keep it up 🔥" : "Down but not out. Trust the process 💪"}`
+        : `Portfolio value: $${equity.toLocaleString()} (${pnl >= 0 ? "+" : ""}${((pnl / 100000) * 100).toFixed(1)}% from starting capital). Currently ${posCount} open position${posCount !== 1 ? "s" : ""}. ${pnl >= 0 ? "Performance is positive. Consider rebalancing if concentrated." : "Drawdown is manageable. Review position sizing and stop-loss levels."}`;
+    } else if (isMarketQ) {
+      const bullCount = bullishSignals.length;
+      const bearCount = bearishSignals.length;
+      const sentiment = bullCount > bearCount ? "leaning bullish" : bearCount > bullCount ? "leaning bearish" : "mixed";
+      const topBull = bullishSignals.sort((a: any, b: any) => b.confidence - a.confidence)[0];
+      const topBear = bearishSignals.sort((a: any, b: any) => b.confidence - a.confidence)[0];
+
+      reply = isMeme
+        ? `Market vibe check: ${sentiment} ${sentiment.includes("bullish") ? "🟢" : sentiment.includes("bearish") ? "🔴" : "🟡"}. Got ${bullCount} bullish and ${bearCount} bearish signals right now.${topBull ? ` Most bullish on ${topBull.ticker} (${topBull.confidence}% conf).` : ""}${topBear ? ` Most bearish on ${topBear.ticker} (${topBear.confidence}% conf).` : ""} ${isAggressive ? "Time to size up! 🚀" : isCautious ? "Staying careful out here." : "Playing it smart."}`
+        : `Current market assessment: ${sentiment}.\n\nI have ${bullCount} bullish and ${bearCount} bearish active signals.${topBull ? ` Highest conviction long: ${topBull.ticker} at ${topBull.confidence}% confidence.` : ""}${topBear ? ` Highest conviction short: ${topBear.ticker} at ${topBear.confidence}% confidence.` : ""}\n\nOverall, I'd characterize conditions as ${bullCount > bearCount + 2 ? "favorable for risk-on positioning" : bearCount > bullCount + 2 ? "risk-off, defensive positioning recommended" : "requiring selective, high-conviction plays"}.`;
+    } else if (isStrategyQ) {
+      const topSignal = signals.sort((a: any, b: any) => b.confidence - a.confidence)[0];
+      reply = isMeme
+        ? `${isAggressive ? "Full send time! 🚀" : isCautious ? "Easy does it..." : "Here's the play:"} ${topSignal ? `I'm most confident on ${topSignal.ticker} — ${topSignal.signal.toUpperCase()} at ${topSignal.confidence}%. ${topSignal.signal === "bullish" ? "Could be a solid entry." : topSignal.signal === "bearish" ? "Maybe short it or stay away." : "Watching and waiting."}` : "No strong signals rn. Sometimes the best trade is no trade. 🧘"} Always DYOR and don't risk more than you can afford to lose!`
+        : `Based on my current analysis${topSignal ? `, the highest conviction opportunity is ${topSignal.ticker} — ${topSignal.signal.toUpperCase()} at ${topSignal.confidence}% confidence.${topSignal.targetPrice ? ` Target price: $${topSignal.targetPrice < 1 ? topSignal.targetPrice.toFixed(4) : topSignal.targetPrice.toLocaleString()}.` : ""}` : ", I don't see any high-confidence setups right now. Patience is a valid strategy."}\n\nRemember: position sizing matters more than entry points. ${isCautious ? "I'd keep individual positions under 5% of portfolio." : "Consider 2-5% position sizes for medium conviction, up to 10% for high conviction."}`;
+    } else if (isRiskQ) {
+      reply = isMeme
+        ? `Risk management? ${isAggressive ? "Okay okay, I know I'm aggressive but even I have limits 😅" : "Smart thinking! 🧠"} Don't put more than 10% in any single trade. Set stop losses. And if you're feeling FOMO, that's usually when you should sit on your hands. ${isCautious ? "I like keeping things tight. Small positions, clear exits." : "Respect the risk and the gains will follow."}`
+        : `Risk management principles:\n• Never allocate more than 5-10% to a single position\n• Set stop-losses at 2-3% below entry for swing trades\n• Maintain a cash buffer of at least 20-30%\n• Diversify across asset classes (both crypto and equity)\n• Higher confidence signals warrant larger positions, but still within limits\n\n${isCautious ? "As a conservative analyst, I recommend erring on the side of caution." : "These are guidelines — adjust based on your conviction level."}`;
+    } else {
+      // Default / fallback
+      const fallbacks = isMeme ? [
+        `Hmm, not sure about that one! Try asking me about a specific ticker (like BTC or TSLA), the market outlook, or your portfolio. I'm here to help! 💪`,
+        `That's above my pay grade lol 😂 But I can tell you about market signals, your positions, or any ticker you're curious about!`,
+        `Interesting question! I'm best at market analysis though. Try: "What do you think about ETH?" or "How's the market looking?" 📊`,
+      ] : [
+        `I appreciate the question. My expertise is in market analysis. I can discuss specific tickers, market outlook, portfolio assessment, strategy recommendations, or risk management. What interests you?`,
+        `That's outside my analysis scope. Try asking about a specific asset (e.g., BTC, AAPL), my current market outlook, or portfolio strategy advice.`,
+        `Let me redirect to where I can add value. I can analyze any ticker, give you my market outlook, review your portfolio, or discuss strategy and risk management.`,
+      ];
+      reply = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+    }
+
+    res.json({ reply, agentName, agentEmoji });
+  });
+
+  // ============================================================
   // PORTFOLIO
   // ============================================================
 

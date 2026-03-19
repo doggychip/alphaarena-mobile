@@ -1,8 +1,16 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
 
+// ─── Types ───────────────────────────────────────────────────────
+interface ChatMessage {
+  role: "user" | "agent";
+  text: string;
+  timestamp: number;
+}
+
+// ─── Mood / Badge helpers ────────────────────────────────────────
 const MOOD_MAP: Record<string, { emoji: string; label: string; color: string }> = {
   euphoric: { emoji: "🤑", label: "Euphoric", color: "#00FF88" },
   confident: { emoji: "😎", label: "Confident", color: "#00D4FF" },
@@ -35,6 +43,7 @@ function RiskBadge({ risk }: { risk: string }) {
   );
 }
 
+// ─── Agent Picker Modal ──────────────────────────────────────────
 function AgentPickerModal({ agents, hfAgents, currentType, onSelect, onClose }: {
   agents: any[]; hfAgents: any[]; currentType: string; onSelect: (type: string) => void; onClose: () => void;
 }) {
@@ -52,7 +61,7 @@ function AgentPickerModal({ agents, hfAgents, currentType, onSelect, onClose }: 
         <div className="w-12 h-1 rounded-full bg-[#2A2A3E] mx-auto mb-4" />
         <h3 className="font-display font-bold text-lg text-center mb-4">🔄 Choose Your Agent</h3>
 
-        {/* MEME AGENTS SECTION */}
+        {/* MEME AGENTS */}
         <div className="mb-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-sm">🎭</span>
@@ -86,31 +95,25 @@ function AgentPickerModal({ agents, hfAgents, currentType, onSelect, onClose }: 
           </div>
         </div>
 
-        {/* HEDGE FUND AGENTS SECTION */}
+        {/* HEDGE FUND AGENTS */}
         <div>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-sm">🏦</span>
             <span className="font-display font-bold text-sm text-neon-cyan">HEDGE FUND AGENTS</span>
             <div className="flex-1 h-px bg-neon-cyan/20" />
           </div>
-
-          {/* Persona Agents */}
           <p className="text-[10px] text-[#888899] font-display mb-2 mt-2">Persona Agents</p>
           <div className="grid grid-cols-2 gap-3 mb-4">
             {personaAgents.map((agent: any) => (
               <HFPickerCard key={agent.agentId} agent={agent} isSelected={agent.agentId === currentType} onSelect={onSelect} />
             ))}
           </div>
-
-          {/* Specialist Agents */}
           <p className="text-[10px] text-[#888899] font-display mb-2">Specialist Agents</p>
           <div className="grid grid-cols-2 gap-3 mb-4">
             {specialistAgents.map((agent: any) => (
               <HFPickerCard key={agent.agentId} agent={agent} isSelected={agent.agentId === currentType} onSelect={onSelect} />
             ))}
           </div>
-
-          {/* Management */}
           <p className="text-[10px] text-[#888899] font-display mb-2">Management</p>
           <div className="grid grid-cols-2 gap-3">
             {managementAgents.map((agent: any) => (
@@ -147,17 +150,220 @@ function HFPickerCard({ agent, isSelected, onSelect }: { agent: any; isSelected:
   );
 }
 
+// ─── Suggestion Chips ────────────────────────────────────────────
+const SUGGESTION_CHIPS = [
+  { label: "📊 Market outlook", message: "What's the market looking like today?" },
+  { label: "💰 My portfolio", message: "How's my portfolio doing?" },
+  { label: "🪙 What about BTC?", message: "What do you think about BTC?" },
+  { label: "📈 What about ETH?", message: "What's your take on ETH?" },
+  { label: "🎯 Strategy advice", message: "What should I do right now?" },
+  { label: "⚠️ Risk tips", message: "Any risk management tips?" },
+];
+
+// ─── Typing indicator ────────────────────────────────────────────
+function TypingIndicator({ emoji }: { emoji: string }) {
+  return (
+    <div className="flex gap-2 items-end">
+      <div className="w-8 h-8 rounded-full bg-[#0A0A0F] border border-[#2A2A3E] flex-shrink-0 flex items-center justify-center text-base">
+        {emoji}
+      </div>
+      <div className="bg-[#1E1E32] rounded-2xl rounded-bl-sm px-4 py-3">
+        <div className="flex gap-1">
+          <div className="w-2 h-2 rounded-full bg-[#555566] animate-bounce" style={{ animationDelay: "0ms" }} />
+          <div className="w-2 h-2 rounded-full bg-[#555566] animate-bounce" style={{ animationDelay: "150ms" }} />
+          <div className="w-2 h-2 rounded-full bg-[#555566] animate-bounce" style={{ animationDelay: "300ms" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Chat Bubble ─────────────────────────────────────────────────
+function ChatBubble({ msg, agentEmoji }: { msg: ChatMessage; agentEmoji: string }) {
+  const isUser = msg.role === "user";
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="bg-neon-green/15 border border-neon-green/30 rounded-2xl rounded-br-sm px-3.5 py-2.5 max-w-[82%]">
+          <p className="text-xs text-[#E8E8E8] leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2 items-end">
+      <div className="w-8 h-8 rounded-full bg-[#0A0A0F] border border-[#2A2A3E] flex-shrink-0 flex items-center justify-center text-base">
+        {agentEmoji}
+      </div>
+      <div className="bg-[#1E1E32] rounded-2xl rounded-bl-sm px-3.5 py-2.5 max-w-[82%]">
+        <p className="text-xs text-[#E8E8E8] leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Agent Detail Drawer ─────────────────────────────────────────
+function AgentDetailDrawer({ agent, agentTier, user, hfAgentDetail, hfMapping, onClose }: {
+  agent: any; agentTier: string; user: any; hfAgentDetail: any; hfMapping: any[]; onClose: () => void;
+}) {
+  const isHF = agentTier === "hedge_fund";
+  const portfolio = user?.portfolio;
+  const dailyPnl = portfolio ? portfolio.totalEquity - 100000 : 0;
+  const moodKey = dailyPnl > 3000 ? "euphoric" : dailyPnl > 1000 ? "confident" : dailyPnl > -500 ? "neutral" : dailyPnl > -2000 ? "nervous" : "rekt";
+  const mood = MOOD_MAP[moodKey];
+
+  const hfStats = hfAgentDetail?.stats;
+  const agentStats = isHF && hfStats ? {
+    winRate: hfStats.winRate,
+    totalSignals: hfStats.totalSignals,
+    avgConfidence: hfStats.avgConfidence,
+  } : {
+    winRate: 67,
+    bestTrade: { amount: 3200, pair: "SOL" },
+    worstTrade: { amount: -800, pair: "DOGE" },
+    totalTrades: 142,
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full max-w-[430px] rounded-t-3xl bg-[#12121A] border-t border-[#2A2A3E] p-4 pb-8 max-h-[80vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="w-12 h-1 rounded-full bg-[#2A2A3E] mx-auto mb-4" />
+
+        {/* Agent Hero */}
+        <div className="text-center mb-4">
+          <div className="w-20 h-20 rounded-full bg-[#0A0A0F] border-2 mx-auto flex items-center justify-center text-4xl" style={{ borderColor: isHF ? "#00D4FF" : "#00D4FF" }}>
+            {agent.avatarEmoji}
+          </div>
+          <h3 className="font-display font-bold text-lg text-[#E8E8E8] mt-2">{agent.name}</h3>
+          <div className="mt-1 flex justify-center"><TierBadge tier={agentTier as any} /></div>
+          <div className="flex flex-wrap justify-center gap-2 mt-2">
+            {isHF ? (
+              <span className="text-xs px-2 py-1 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">
+                {agent.tradingPhilosophy?.split('.')[0]}
+              </span>
+            ) : (
+              <>
+                <span className="text-xs px-2 py-1 rounded-full bg-neon-pink/10 text-neon-pink border border-neon-pink/20 font-display">{agent.personality}</span>
+                <span className="text-xs px-2 py-1 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">{agent.tradingStyle}</span>
+              </>
+            )}
+          </div>
+          {isHF && agent.description && (
+            <p className="text-xs text-[#888899] mt-2 leading-relaxed">"{agent.description}"</p>
+          )}
+        </div>
+
+        {/* Mood */}
+        <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-3 flex items-center gap-3 mb-3">
+          <span className="text-2xl">{mood.emoji}</span>
+          <div>
+            <p className="font-display font-bold text-sm" style={{ color: mood.color }}>{mood.label}</p>
+            <p className="text-[10px] text-[#888899]">Current mood based on performance</p>
+          </div>
+        </div>
+
+        {/* Stats */}
+        {isHF ? (
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <MiniStat emoji="✅" label="Win Rate" value={`${agentStats.winRate}%`} color="#00FF88" />
+            <MiniStat emoji="📊" label="Signals" value={String(agentStats.totalSignals)} color="#00D4FF" />
+            <MiniStat emoji="🎯" label="Avg Conf" value={`${agentStats.avgConfidence}%`} color="#FFD700" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <MiniStat emoji="✅" label="Win Rate" value={`${(agentStats as any).winRate}%`} color="#00FF88" />
+            <MiniStat emoji="📊" label="Trades" value={String((agentStats as any).totalTrades)} color="#00D4FF" />
+          </div>
+        )}
+
+        {/* HF Signal History */}
+        {isHF && hfAgentDetail?.latestSignals && hfAgentDetail.latestSignals.length > 0 && (
+          <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-3 mb-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-[#888899] font-display">📡 Recent Signals</p>
+              <Link href={`/signals/${user?.selectedAgentType}`}>
+                <span className="text-[10px] text-neon-cyan font-display">View All →</span>
+              </Link>
+            </div>
+            <div className="space-y-1.5">
+              {hfAgentDetail.latestSignals.slice(0, 3).map((sig: any) => {
+                const sigColor = sig.signal === "bullish" ? "text-neon-green" : sig.signal === "bearish" ? "text-neon-pink" : "text-neon-gold";
+                const sigEmoji = sig.signal === "bullish" ? "🟢" : sig.signal === "bearish" ? "🔴" : "🟡";
+                return (
+                  <div key={sig.id} className="flex items-center gap-2 py-1.5 px-2 rounded-xl bg-[#12121A] border border-[#2A2A3E]">
+                    <span className="font-display font-bold text-xs text-[#E8E8E8] w-12">{sig.ticker}</span>
+                    <span className={`text-[10px] font-display font-bold ${sigColor}`}>{sigEmoji} {sig.signal?.toUpperCase()}</span>
+                    <span className="text-[10px] font-mono-num text-[#888899] ml-auto">{sig.confidence}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Brain Trust for Meme Agents */}
+        {!isHF && hfMapping && hfMapping.length > 0 && (
+          <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-3">
+            <p className="text-xs text-[#888899] font-display mb-2">🧠 Brain Trust</p>
+            <div className="space-y-1.5">
+              {hfMapping.map((m: any) => {
+                const signalColor = m.latestSignal?.signal === "bullish" ? "text-neon-green" : m.latestSignal?.signal === "bearish" ? "text-neon-pink" : "text-neon-gold";
+                const signalEmoji = m.latestSignal?.signal === "bullish" ? "🟢" : m.latestSignal?.signal === "bearish" ? "🔴" : "🟡";
+                return (
+                  <div key={m.hedgeFundAgentId} className="flex items-center gap-2 py-1.5 px-2 rounded-xl bg-[#12121A] border border-[#2A2A3E]">
+                    <span className="text-lg">{m.hfAgent?.avatarEmoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display font-semibold text-xs text-[#E8E8E8]">{m.hfAgent?.name}</p>
+                      <p className="text-[9px] text-[#888899]">Weight: {Math.round(m.weight * 100)}%</p>
+                    </div>
+                    {m.latestSignal && (
+                      <span className={`text-[10px] font-display font-bold ${signalColor}`}>
+                        {signalEmoji} {m.latestSignal.confidence}%
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ emoji, label, value, color }: { emoji: string; label: string; value: string; color: string }) {
+  return (
+    <div className="rounded-xl bg-[#1A1A2E] border border-[#2A2A3E] p-2 text-center">
+      <span className="text-xs">{emoji}</span>
+      <p className="font-mono-num text-sm font-bold mt-0.5" style={{ color }}>{value}</p>
+      <p className="text-[9px] text-[#888899] font-display">{label}</p>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MAIN PAGE
+// ═══════════════════════════════════════════════════════════════════
 export default function AgentPage() {
   const [showPicker, setShowPicker] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [isTyping, setIsTyping] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   const { data: meData } = useQuery<any>({ queryKey: ["/api/me"] });
   const { data: agentsData } = useQuery<any>({ queryKey: ["/api/agents"] });
   const { data: hfAgentsData } = useQuery<any[]>({ queryKey: ["/api/hf-agents"] });
-  const { data: chatMessages } = useQuery<any>({
-    queryKey: ["/api/agent/messages"],
-    refetchInterval: 30000,
-  });
 
   const agentTier: "meme" | "hedge_fund" = meData?.agentTier || "meme";
   const isHF = agentTier === "hedge_fund";
@@ -171,7 +377,6 @@ export default function AgentPage() {
     enabled: !!meData?.user?.selectedAgentType && !isHF,
   });
 
-  // Fetch HF agent detail when HF agent is selected
   const { data: hfAgentDetail } = useQuery<any>({
     queryKey: ["/api/hf-agents", meData?.user?.selectedAgentType],
     queryFn: async () => {
@@ -185,26 +390,69 @@ export default function AgentPage() {
   const agent = meData?.agent;
   const agents = agentsData || [];
   const hfAgents = hfAgentsData || [];
-  const messages = chatMessages || [];
 
-  // Derive mood from portfolio performance
-  const portfolio = meData?.portfolio;
-  const dailyPnl = portfolio ? portfolio.totalEquity - 100000 : 0;
-  const moodKey = dailyPnl > 3000 ? "euphoric" : dailyPnl > 1000 ? "confident" : dailyPnl > -500 ? "neutral" : dailyPnl > -2000 ? "nervous" : "rekt";
-  const mood = MOOD_MAP[moodKey];
+  // Chat mutation
+  const chatMutation = useMutation({
+    mutationFn: async (message: string) => {
+      const res = await apiRequest("POST", "/api/agent/chat", { message });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setChatHistory(prev => [...prev, {
+        role: "agent",
+        text: data.reply,
+        timestamp: Date.now(),
+      }]);
+      setIsTyping(false);
+    },
+    onError: () => {
+      setChatHistory(prev => [...prev, {
+        role: "agent",
+        text: "Sorry, I'm having trouble thinking right now. Try again in a sec! 🤔",
+        timestamp: Date.now(),
+      }]);
+      setIsTyping(false);
+    },
+  });
 
-  // Agent stats
-  const hfStats = hfAgentDetail?.stats;
-  const agentStats = isHF && hfStats ? {
-    winRate: hfStats.winRate,
-    totalSignals: hfStats.totalSignals,
-    avgConfidence: hfStats.avgConfidence,
-  } : {
-    winRate: 67,
-    bestTrade: { amount: 3200, pair: "SOL" },
-    worstTrade: { amount: -800, pair: "DOGE" },
-    totalTrades: 142,
-    level: user?.level || 12,
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatHistory, isTyping]);
+
+  // Send welcome message when agent loads (only once per agent)
+  const welcomeSentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (agent && user?.selectedAgentType && welcomeSentRef.current !== user.selectedAgentType) {
+      welcomeSentRef.current = user.selectedAgentType;
+      setChatHistory([]);
+      setIsTyping(true);
+      // Small delay for realism
+      setTimeout(() => {
+        chatMutation.mutate("hi");
+      }, 400);
+    }
+  }, [agent, user?.selectedAgentType]);
+
+  const handleSend = (text?: string) => {
+    const msg = text || inputText.trim();
+    if (!msg || isTyping) return;
+
+    setChatHistory(prev => [...prev, { role: "user", text: msg, timestamp: Date.now() }]);
+    setInputText("");
+    setIsTyping(true);
+
+    // Small delay before "agent starts typing"
+    setTimeout(() => {
+      chatMutation.mutate(msg);
+    }, 300 + Math.random() * 500);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
   const handleSelectAgent = async (type: string) => {
@@ -213,195 +461,134 @@ export default function AgentPage() {
     queryClient.invalidateQueries({ queryKey: ["/api/agent/messages"] });
     queryClient.invalidateQueries({ queryKey: ["/api/agent/message"] });
     setShowPicker(false);
+    // Reset chat — welcome will trigger automatically via useEffect
+    welcomeSentRef.current = null;
   };
 
+  const agentEmoji = agent?.avatarEmoji || "🤖";
+  const agentName = agent?.name || "Agent";
+
+  // Mood
+  const portfolio = meData?.portfolio;
+  const dailyPnl = portfolio ? portfolio.totalEquity - 100000 : 0;
+  const moodKey = dailyPnl > 3000 ? "euphoric" : dailyPnl > 1000 ? "confident" : dailyPnl > -500 ? "neutral" : dailyPnl > -2000 ? "nervous" : "rekt";
+  const mood = MOOD_MAP[moodKey];
+
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-40 px-4 py-3" style={{ background: "rgba(10, 10, 15, 0.9)", backdropFilter: "blur(12px)" }}>
-        <h1 className="font-display font-bold text-lg text-[#E8E8E8]">🤖 Your Agent</h1>
-      </header>
+    <div className="flex flex-col h-screen" style={{ height: "calc(100vh - 64px)" }}>
 
-      {/* Agent Hero */}
-      {agent && (
-        <div className="mx-4 mt-2 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-6 text-center">
-          {/* Avatar */}
-          <div className="w-24 h-24 rounded-full bg-[#0A0A0F] border-3 border-neon-cyan mx-auto flex items-center justify-center text-5xl animate-bounce-gentle" style={{ borderWidth: 3, borderColor: isHF ? "#00D4FF" : "#00D4FF" }}>
-            {agent.avatarEmoji}
+      {/* ─── Compact Agent Header ─── */}
+      <header
+        className="sticky top-0 z-40 px-4 py-2.5 flex items-center gap-3 border-b border-[#2A2A3E]"
+        style={{ background: "rgba(10, 10, 15, 0.95)", backdropFilter: "blur(12px)" }}
+      >
+        {/* Avatar — tappable for details */}
+        <button onClick={() => setShowDetail(true)} className="relative active:scale-95 transition-transform">
+          <div className="w-10 h-10 rounded-full bg-[#0A0A0F] border-2 flex items-center justify-center text-xl" style={{ borderColor: isHF ? "#00D4FF" : "#FF3B9A" }}>
+            {agentEmoji}
           </div>
-          <h2 className="font-display font-bold text-xl text-[#E8E8E8] mt-3">{agent.name}</h2>
+          {/* Mood dot */}
+          <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-[#0A0A0F] flex items-center justify-center text-[7px]" style={{ backgroundColor: mood.color }}>
+          </div>
+        </button>
 
-          {/* Tier Badge */}
-          <div className="mt-2 flex justify-center">
+        {/* Name + tier */}
+        <button onClick={() => setShowDetail(true)} className="flex-1 min-w-0 text-left active:opacity-80">
+          <div className="flex items-center gap-2">
+            <h1 className="font-display font-bold text-base text-[#E8E8E8] truncate">{agentName}</h1>
             <TierBadge tier={agentTier} />
           </div>
-
-          {/* Level + XP */}
-          <div className="mt-2">
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-xs text-neon-gold font-display font-bold">⭐ Level {user?.level}</span>
-              <span className="text-xs text-[#888899] font-mono-num">{user?.xp?.toLocaleString()} XP</span>
-            </div>
-            <div className="w-48 h-2 rounded-full bg-[#2A2A3E] mx-auto mt-1 overflow-hidden">
-              <div className="h-full rounded-full bg-neon-gold transition-all" style={{ width: `${((user?.xp || 0) % 500) / 500 * 100}%` }} />
-            </div>
-          </div>
-
-          {/* Personality Tags / Trading Philosophy */}
-          <div className="flex flex-wrap justify-center gap-2 mt-3">
-            {isHF ? (
-              <>
-                <span className="text-xs px-2 py-1 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">
-                  {agent.tradingPhilosophy?.split('.')[0]}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="text-xs px-2 py-1 rounded-full bg-neon-pink/10 text-neon-pink border border-neon-pink/20 font-display">
-                  {agent.personality}
-                </span>
-                <span className="text-xs px-2 py-1 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">
-                  {agent.tradingStyle}
-                </span>
-              </>
-            )}
-          </div>
-
-          {/* HF Agent Description */}
-          {isHF && agent.description && (
-            <p className="text-xs text-[#888899] mt-3 leading-relaxed">"{agent.description}"</p>
-          )}
-        </div>
-      )}
-
-      {/* Mood Indicator */}
-      <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4 flex items-center gap-3">
-        <span className="text-3xl">{mood.emoji}</span>
-        <div>
-          <p className="font-display font-bold text-sm" style={{ color: mood.color }}>
-            {mood.label}
+          <p className="text-[10px] text-[#888899] truncate">
+            {isHF ? agent?.tradingPhilosophy?.split('.')[0] : agent?.tradingStyle} · Tap for details
           </p>
-          <p className="text-[10px] text-[#888899]">Current mood based on performance</p>
-        </div>
-      </div>
+        </button>
 
-      {/* Agent Chat */}
-      <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
-        <p className="text-xs text-[#888899] font-display mb-3">💬 Agent Chat</p>
-        <div className="space-y-3 max-h-[300px] overflow-y-auto hide-scrollbar">
-          {messages.map((msg: any, i: number) => (
-            <div key={i} className="flex gap-2">
-              <div className="w-7 h-7 rounded-full bg-[#0A0A0F] flex-shrink-0 flex items-center justify-center text-sm">
-                {agent?.avatarEmoji || "🤖"}
-              </div>
-              <div className="bg-[#1E1E32] rounded-xl rounded-tl-sm px-3 py-2 max-w-[85%]">
-                <p className="text-xs text-[#E8E8E8] leading-relaxed">{msg.message}</p>
-                <p className="text-[8px] text-[#555566] mt-1">{MOOD_MAP[msg.mood]?.emoji} {msg.mood}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Agent Stats - Different layout for HF vs Meme */}
-      {isHF ? (
-        <div className="mx-4 mt-4 grid grid-cols-3 gap-3">
-          <StatCard emoji="✅" label="Win Rate" value={`${agentStats.winRate}%`} color="#00FF88" />
-          <StatCard emoji="📊" label="Signals" value={String(agentStats.totalSignals)} color="#00D4FF" />
-          <StatCard emoji="🎯" label="Avg Conf" value={`${agentStats.avgConfidence}%`} color="#FFD700" />
-        </div>
-      ) : (
-        <div className="mx-4 mt-4 grid grid-cols-2 gap-3">
-          <StatCard emoji="✅" label="Win Rate" value={`${(agentStats as any).winRate}%`} color="#00FF88" />
-          <StatCard emoji="🏆" label="Best Trade" value={`+$${(agentStats as any).bestTrade?.amount.toLocaleString()}`} subtext={(agentStats as any).bestTrade?.pair} color="#00FF88" />
-          <StatCard emoji="💀" label="Worst Trade" value={`-$${Math.abs((agentStats as any).worstTrade?.amount).toLocaleString()}`} subtext={(agentStats as any).worstTrade?.pair} color="#FF3B9A" />
-          <StatCard emoji="📊" label="Total Trades" value={(agentStats as any).totalTrades?.toString()} color="#00D4FF" />
-        </div>
-      )}
-
-      {/* HF Signal History */}
-      {isHF && hfAgentDetail?.latestSignals && hfAgentDetail.latestSignals.length > 0 && (
-        <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-xs text-[#888899] font-display">📡 Signal History</p>
-            <Link href={`/signals/${user?.selectedAgentType}`}>
-              <span className="text-[10px] text-neon-cyan font-display">View Full Analysis →</span>
-            </Link>
-          </div>
-          <div className="space-y-2">
-            {hfAgentDetail.latestSignals.slice(0, 5).map((sig: any) => {
-              const sigColor = sig.signal === "bullish" ? "text-neon-green" : sig.signal === "bearish" ? "text-neon-pink" : "text-neon-gold";
-              const sigEmoji = sig.signal === "bullish" ? "🟢" : sig.signal === "bearish" ? "🔴" : "🟡";
-              const timeAgo = getTimeAgo(sig.createdAt);
-              return (
-                <div key={sig.id} className="flex items-center gap-3 py-2 px-3 rounded-xl bg-[#12121A] border border-[#2A2A3E]">
-                  <span className="font-display font-bold text-xs text-[#E8E8E8] w-12">{sig.ticker}</span>
-                  <span className={`text-[10px] font-display font-bold ${sigColor}`}>
-                    {sigEmoji} {sig.signal?.toUpperCase()}
-                  </span>
-                  <span className="text-[10px] font-mono-num text-[#888899] ml-auto">{sig.confidence}%</span>
-                  <span className="text-[9px] text-[#555566]">{timeAgo}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Brain Trust — Only show for Meme agents */}
-      {!isHF && hfMapping && hfMapping.length > 0 && (
-        <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
-          <p className="text-xs text-[#888899] font-display mb-3">🧠 Brain Trust</p>
-          <p className="text-[10px] text-[#555566] mb-3">
-            The hedge fund agents powering {agent?.name}'s analysis
-          </p>
-          <div className="space-y-2">
-            {hfMapping.map((m: any) => {
-              const signalColor = m.latestSignal?.signal === "bullish" ? "text-neon-green" : m.latestSignal?.signal === "bearish" ? "text-neon-pink" : "text-neon-gold";
-              const signalEmoji = m.latestSignal?.signal === "bullish" ? "🟢" : m.latestSignal?.signal === "bearish" ? "🔴" : "🟡";
-              return (
-                <Link key={m.hedgeFundAgentId} href={`/signals/${m.hedgeFundAgentId}`}>
-                  <div className="flex items-center gap-3 py-2 px-3 rounded-xl bg-[#12121A] border border-[#2A2A3E] cursor-pointer hover:border-neon-cyan/30 transition-colors">
-                    <span className="text-xl">{m.hfAgent?.avatarEmoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-display font-semibold text-sm text-[#E8E8E8]">{m.hfAgent?.name}</p>
-                      <p className="text-[10px] text-[#888899]">Weight: {Math.round(m.weight * 100)}%</p>
-                    </div>
-                    {m.latestSignal && (
-                      <div className="text-right">
-                        <span className={`text-[10px] font-display font-bold ${signalColor}`}>
-                          {signalEmoji} {m.latestSignal.signal?.toUpperCase()}
-                        </span>
-                        <p className="text-[9px] font-mono-num text-[#888899]">{m.latestSignal.confidence}%</p>
-                      </div>
-                    )}
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Switch Agent Button */}
-      <div className="mx-4 mt-4 mb-4">
+        {/* Switch agent button */}
         <button
           data-testid="btn-switch-agent"
           onClick={() => setShowPicker(true)}
-          className="w-full py-4 rounded-2xl bg-[#1A1A2E] border border-neon-cyan/30 font-display font-bold text-neon-cyan text-sm active:scale-95 transition-transform"
+          className="w-9 h-9 rounded-xl bg-[#1A1A2E] border border-[#2A2A3E] flex items-center justify-center text-base active:scale-95 transition-transform"
+          title="Switch Agent"
         >
-          🔄 Switch Agent
+          🔄
         </button>
+      </header>
+
+      {/* ─── Chat Messages ─── */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 hide-scrollbar">
+        {/* Empty state — only if no messages and not typing */}
+        {chatHistory.length === 0 && !isTyping && (
+          <div className="flex flex-col items-center justify-center h-full text-center px-6 opacity-60">
+            <div className="text-5xl mb-3">{agentEmoji}</div>
+            <p className="font-display font-bold text-sm text-[#E8E8E8]">Ask {agentName} anything</p>
+            <p className="text-xs text-[#888899] mt-1">
+              Market outlook, ticker analysis, portfolio advice, risk management...
+            </p>
+          </div>
+        )}
+
+        {chatHistory.map((msg, i) => (
+          <ChatBubble key={i} msg={msg} agentEmoji={agentEmoji} />
+        ))}
+
+        {isTyping && <TypingIndicator emoji={agentEmoji} />}
+
+        <div ref={chatEndRef} />
       </div>
 
-      {/* Footer attribution */}
-      <div className="px-4 pb-4 text-center">
-        <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#555566]">
-          Created with Perplexity Computer
-        </a>
+      {/* ─── Suggestion Chips ─── */}
+      {chatHistory.length <= 2 && !isTyping && (
+        <div className="px-4 pb-2">
+          <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+            {SUGGESTION_CHIPS.map((chip, i) => (
+              <button
+                key={i}
+                onClick={() => handleSend(chip.message)}
+                className="flex-shrink-0 px-3 py-1.5 rounded-full bg-[#1A1A2E] border border-[#2A2A3E] text-[11px] text-[#E8E8E8] font-display whitespace-nowrap active:scale-95 active:border-neon-green/50 transition-all hover:border-neon-cyan/40"
+              >
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Input Area ─── */}
+      <div
+        className="sticky bottom-0 px-4 pt-2 pb-3 border-t border-[#2A2A3E]"
+        style={{ background: "rgba(10, 10, 15, 0.95)", backdropFilter: "blur(12px)" }}
+      >
+        <div className="flex items-center gap-2">
+          <input
+            ref={inputRef}
+            data-testid="chat-input"
+            type="text"
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={`Ask ${agentName}...`}
+            disabled={isTyping}
+            className="flex-1 bg-[#1A1A2E] border border-[#2A2A3E] rounded-2xl px-4 py-3 text-sm text-[#E8E8E8] placeholder-[#555566] font-display outline-none focus:border-neon-cyan/50 transition-colors disabled:opacity-50"
+          />
+          <button
+            data-testid="chat-send"
+            onClick={() => handleSend()}
+            disabled={!inputText.trim() || isTyping}
+            className="w-11 h-11 rounded-2xl bg-neon-green/20 border border-neon-green/40 flex items-center justify-center text-lg active:scale-90 transition-all disabled:opacity-30 disabled:bg-[#1A1A2E] disabled:border-[#2A2A3E]"
+          >
+            ⬆️
+          </button>
+        </div>
+
+        {/* Footer attribution */}
+        <div className="text-center mt-1.5">
+          <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="text-[9px] text-[#555566]">
+            Created with Perplexity Computer
+          </a>
+        </div>
       </div>
 
-      {/* Agent Picker Modal */}
+      {/* ─── Modals ─── */}
       {showPicker && (
         <AgentPickerModal
           agents={agents}
@@ -411,30 +598,17 @@ export default function AgentPage() {
           onClose={() => setShowPicker(false)}
         />
       )}
+
+      {showDetail && agent && (
+        <AgentDetailDrawer
+          agent={agent}
+          agentTier={agentTier}
+          user={{ ...user, portfolio }}
+          hfAgentDetail={hfAgentDetail}
+          hfMapping={hfMapping || []}
+          onClose={() => setShowDetail(false)}
+        />
+      )}
     </div>
   );
-}
-
-function StatCard({ emoji, label, value, subtext, color }: {
-  emoji: string; label: string; value: string; subtext?: string; color: string;
-}) {
-  return (
-    <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-3">
-      <div className="flex items-center gap-1.5 mb-1">
-        <span className="text-sm">{emoji}</span>
-        <span className="text-[10px] text-[#888899] font-display">{label}</span>
-      </div>
-      <span className="font-mono-num text-lg font-bold" style={{ color }}>{value}</span>
-      {subtext && <p className="text-[10px] text-[#888899]">({subtext})</p>}
-    </div>
-  );
-}
-
-function getTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const hours = Math.floor(diff / 3600000);
-  if (hours < 1) return "just now";
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
 }
