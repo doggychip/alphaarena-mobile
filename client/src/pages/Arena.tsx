@@ -52,10 +52,7 @@ function getLeague(rank: number) {
   return LEAGUE_CONFIG[3];
 }
 
-type ArenaTab = "agents" | "players";
-
 export default function Arena() {
-  const [activeTab, setActiveTab] = useState<ArenaTab>("agents");
   const [selectedLeague, setSelectedLeague] = useState("all");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [sortBy, setSortBy] = useState("compositeScore");
@@ -82,29 +79,21 @@ export default function Arena() {
 
   const competition = competitionData;
   const allEntries = leaderboardData?.entries || [];
-  const myEntry = meData?.leaderboardEntry;
 
-  // Split entries into agents and players
-  const agentEntries = allEntries.filter((e: any) => e.isAgent);
-  const playerEntries = allEntries.filter((e: any) => !e.isAgent);
+  // Find the user's selected agent in the leaderboard
+  const myAgentType = meData?.user?.selectedAgentType;
+  const myAgentEntry = allEntries.find((e: any) => e.user?.selectedAgentType === myAgentType);
 
-  // Re-rank within each tab
-  const rankedAgentEntries = agentEntries.map((e: any, i: number) => ({ ...e, tabRank: i + 1 }));
-  const rankedPlayerEntries = playerEntries.map((e: any, i: number) => ({ ...e, tabRank: i + 1 }));
-
-  const baseEntries = activeTab === "agents" ? rankedAgentEntries : rankedPlayerEntries;
-  const totalEntries = baseEntries.length;
-
-  // Filter by league (use tabRank for league assignment)
+  // Filter by league
   let filteredEntries = selectedLeague === "all"
-    ? baseEntries
-    : baseEntries.filter((e: any) => {
-        const league = getLeague(e.tabRank);
+    ? allEntries
+    : allEntries.filter((e: any) => {
+        const league = getLeague(e.rank);
         return league.id === selectedLeague;
       });
 
-  // Filter by agent category (only for agents tab)
-  if (activeTab === "agents" && selectedCategory !== "all") {
+  // Filter by agent category
+  if (selectedCategory !== "all") {
     filteredEntries = filteredEntries.filter((e: any) => getAgentCategory(e) === selectedCategory);
   }
 
@@ -123,14 +112,6 @@ export default function Arena() {
   const now = new Date();
   const daysLeft = endDate ? Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / 86400000)) : 0;
 
-  // Reset filters when switching tabs
-  const handleTabSwitch = (tab: ArenaTab) => {
-    setActiveTab(tab);
-    setSelectedCategory("all");
-    setSortBy("compositeScore");
-    setSelectedLeague("all");
-  };
-
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
@@ -148,32 +129,9 @@ export default function Arena() {
           <span className="font-mono-num text-2xl font-bold text-neon-gold">{daysLeft}</span>
           <span className="text-sm text-[#888899]">days left</span>
         </div>
-      </div>
-
-      {/* Tab Switcher: AI Agents / Players */}
-      <div className="mx-4 mt-4 flex rounded-2xl bg-[#12121A] border border-[#2A2A3E] p-1">
-        <button
-          onClick={() => handleTabSwitch("agents")}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-display font-bold transition-all ${
-            activeTab === "agents"
-              ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/40"
-              : "text-[#888899] border border-transparent"
-          }`}
-        >
-          🤖 AI Agents
-          <span className="ml-1.5 text-[10px] font-mono-num opacity-70">{agentEntries.length}</span>
-        </button>
-        <button
-          onClick={() => handleTabSwitch("players")}
-          className={`flex-1 py-2.5 rounded-xl text-sm font-display font-bold transition-all ${
-            activeTab === "players"
-              ? "bg-neon-green/15 text-neon-green border border-neon-green/40"
-              : "text-[#888899] border border-transparent"
-          }`}
-        >
-          👤 Players
-          <span className="ml-1.5 text-[10px] font-mono-num opacity-70">{playerEntries.length}</span>
-        </button>
+        <p className="text-[10px] text-[#555566] mt-2 font-display">
+          AI agents compete head-to-head. Pick agents to follow, view their signals, and stake on the best.
+        </p>
       </div>
 
       {/* How Rankings Work */}
@@ -213,20 +171,6 @@ export default function Arena() {
                 Return % is computed from each agent's actual trading signals. Correct calls generate gains proportional to confidence, while incorrect calls generate losses. The return is the sum of all daily P&L from signal outcomes.
               </p>
             </div>
-            {/* Tab context */}
-            <div className="rounded-xl bg-[#1A1A2E] border border-neon-cyan/20 p-3">
-              <p className="text-[10px] text-[#888899] leading-relaxed">
-                {activeTab === "agents" ? (
-                  <>
-                    <span className="text-neon-cyan font-display font-bold">AI Agent Rankings</span> — Compare autonomous AI trading agents head-to-head. Pick the best-performing agent to follow or stake on.
-                  </>
-                ) : (
-                  <>
-                    <span className="text-neon-green font-display font-bold">Player Rankings</span> — See how real players stack up. Your rank is based on the performance of your chosen agent and trades.
-                  </>
-                )}
-              </p>
-            </div>
             {/* Data source note */}
             <div className="rounded-xl bg-[#1A1A2E] border border-neon-gold/20 p-3">
               <p className="text-[10px] text-[#888899] leading-relaxed">
@@ -237,52 +181,55 @@ export default function Arena() {
         )}
       </div>
 
-      {/* Your Rank Card — show in both tabs */}
-      {myEntry && (
+      {/* Your Agent's Rank */}
+      {myAgentEntry && (
         <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-neon-green/30 p-4">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs">👤</span>
-            <p className="text-xs text-[#888899] font-display">Your Rank</p>
+            <span className="text-xs">🎯</span>
+            <p className="text-xs text-[#888899] font-display">Your Agent's Rank</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className="text-center">
-              <span className="font-mono-num text-3xl font-bold text-neon-green">#{myEntry.rank}</span>
-              <p className="text-[10px] text-[#888899] mt-0.5">of {allEntries.length}</p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#0A0A0F] border border-neon-green/40 flex items-center justify-center text-xl">
+                {myAgentEntry.agent?.avatarEmoji || "🤖"}
+              </div>
+              <div>
+                <p className="font-display font-bold text-sm text-[#E8E8E8]">{myAgentEntry.agent?.name || myAgentEntry.user?.username}</p>
+                <span className="font-mono-num text-2xl font-bold text-neon-green">#{myAgentEntry.rank}</span>
+                <span className="text-[10px] text-[#888899] ml-1">of {allEntries.length}</span>
+              </div>
             </div>
             <div className="flex-1 space-y-2">
-              <StatBar label="Return" value={myEntry.totalReturn} max={50} color="#00FF88" suffix="%" />
-              <StatBar label="Sharpe" value={myEntry.sharpeRatio} max={3} color="#00D4FF" />
-              <StatBar label="Win Rate" value={myEntry.winRate} max={100} color="#FFD700" suffix="%" />
-              <StatBar label="DrawDown" value={myEntry.maxDrawdown} max={30} color="#FF3B9A" suffix="%" inverted />
+              <StatBar label="Return" value={myAgentEntry.totalReturn} max={50} color="#00FF88" suffix="%" />
+              <StatBar label="Sharpe" value={myAgentEntry.sharpeRatio} max={3} color="#00D4FF" />
+              <StatBar label="Win Rate" value={myAgentEntry.winRate} max={100} color="#FFD700" suffix="%" />
             </div>
           </div>
         </div>
       )}
 
-      {/* Category Filter — only for agents tab */}
-      {activeTab === "agents" && (
-        <div className="mx-4 mt-4">
-          <p className="text-[10px] text-[#888899] font-display mb-1.5 uppercase tracking-wider">Agent Type</p>
-          <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
-            {CATEGORY_FILTERS.map(cat => (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-display font-bold transition-all ${
-                  selectedCategory === cat.id
-                    ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/40"
-                    : "bg-[#1A1A2E] text-[#888899] border border-[#2A2A3E]"
-                }`}
-              >
-                {cat.emoji} {cat.label}
-              </button>
-            ))}
-          </div>
+      {/* Category Filter */}
+      <div className="mx-4 mt-4">
+        <p className="text-[10px] text-[#888899] font-display mb-1.5 uppercase tracking-wider">Agent Type</p>
+        <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
+          {CATEGORY_FILTERS.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setSelectedCategory(cat.id)}
+              className={`flex-shrink-0 px-2.5 py-1.5 rounded-xl text-[11px] font-display font-bold transition-all ${
+                selectedCategory === cat.id
+                  ? "bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/40"
+                  : "bg-[#1A1A2E] text-[#888899] border border-[#2A2A3E]"
+              }`}
+            >
+              {cat.emoji} {cat.label}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       {/* Sort By */}
-      <div className={`mx-4 ${activeTab === "agents" ? "mt-3" : "mt-4"}`}>
+      <div className="mx-4 mt-3">
         <p className="text-[10px] text-[#888899] font-display mb-1.5 uppercase tracking-wider">Sort By</p>
         <div className="flex gap-1.5 overflow-x-auto hide-scrollbar">
           {SORT_OPTIONS.map(opt => (
@@ -335,7 +282,7 @@ export default function Arena() {
       {/* Result Count */}
       <div className="mx-4 mt-3 flex items-center justify-between">
         <span className="text-[10px] text-[#888899] font-mono-num">
-          {filteredEntries.length} {activeTab === "agents" ? "agent" : "player"}{filteredEntries.length !== 1 ? "s" : ""}
+          {filteredEntries.length} agent{filteredEntries.length !== 1 ? "s" : ""}
         </span>
         {(selectedCategory !== "all" || sortBy !== "compositeScore" || selectedLeague !== "all") && (
           <button
@@ -364,19 +311,15 @@ export default function Arena() {
       <div className="mx-4 mt-4 space-y-2 mb-4">
         {filteredEntries.length === 0 && (
           <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-6 text-center">
-            <span className="text-2xl">{activeTab === "agents" ? "🤖" : "👤"}</span>
-            <p className="text-sm text-[#888899] mt-2 font-display">
-              {activeTab === "agents" ? "No agents found" : "No players yet"}
-            </p>
-            <p className="text-[10px] text-[#555566] mt-1">
-              {activeTab === "agents" ? "Try adjusting your filters" : "Be the first to compete"}
-            </p>
+            <span className="text-2xl">🤖</span>
+            <p className="text-sm text-[#888899] mt-2 font-display">No agents found</p>
+            <p className="text-[10px] text-[#555566] mt-1">Try adjusting your filters</p>
           </div>
         )}
         {filteredEntries.map((entry: any) => {
-          const displayRank = sortBy === "compositeScore" ? entry.tabRank : undefined;
-          const league = getLeague(entry.tabRank);
-          const isMe = entry.userId === meData?.user?.id;
+          const displayRank = sortBy === "compositeScore" ? entry.rank : undefined;
+          const league = getLeague(entry.rank);
+          const isMyAgent = entry.user?.selectedAgentType === myAgentType;
           const staked = stakedMap.get(entry.userId) || 0;
           const isHeavilyStaked = staked >= 1000;
           const tier = entry.user?.selectedAgentType ? getAgentTier(entry.user.selectedAgentType) : "meme";
@@ -385,11 +328,9 @@ export default function Arena() {
             <div
               key={entry.userId}
               data-testid={`leaderboard-entry-${entry.userId}`}
-              onClick={() => activeTab === "agents" ? goToAgent(entry.user) : undefined}
-              className={`rounded-2xl bg-[#1A1A2E] border p-3 flex items-center gap-3 card-tap ${
-                activeTab === "agents" ? "cursor-pointer active:scale-[0.98]" : ""
-              } transition-transform ${
-                isMe ? "border-neon-green/50 glow-green" : isHeavilyStaked ? "border-neon-gold/40" : "border-[#2A2A3E]"
+              onClick={() => goToAgent(entry.user)}
+              className={`rounded-2xl bg-[#1A1A2E] border p-3 flex items-center gap-3 card-tap cursor-pointer active:scale-[0.98] transition-transform ${
+                isMyAgent ? "border-neon-green/50 glow-green" : isHeavilyStaked ? "border-neon-gold/40" : "border-[#2A2A3E]"
               }`}
             >
               {/* Rank */}
@@ -404,9 +345,9 @@ export default function Arena() {
               </div>
               {/* Avatar */}
               <div className={`w-10 h-10 rounded-full bg-[#0A0A0F] flex items-center justify-center text-xl border ${
-                isMe ? "border-neon-green/50" : "border-[#2A2A3E]"
+                isMyAgent ? "border-neon-green/50" : "border-[#2A2A3E]"
               }`}>
-                {entry.agent?.avatarEmoji || (isMe ? "🎮" : "👤")}
+                {entry.agent?.avatarEmoji || "🤖"}
               </div>
               {/* Info */}
               <div className="flex-1 min-w-0">
@@ -414,33 +355,23 @@ export default function Arena() {
                   <span className="font-display font-semibold text-sm text-[#E8E8E8] truncate">
                     {entry.user?.username}
                   </span>
-                  {activeTab === "agents" && (
-                    <span className="text-[9px] px-1 rounded" style={{
-                      background: tier === "hf" ? "rgba(0,212,255,0.15)" : "rgba(255,59,154,0.15)",
-                      color: tier === "hf" ? "#00D4FF" : "#FF3B9A",
-                    }}>
-                      {tier === "hf" ? "🏦" : "🎭"}
-                    </span>
+                  <span className="text-[9px] px-1 rounded" style={{
+                    background: tier === "hf" ? "rgba(0,212,255,0.15)" : "rgba(255,59,154,0.15)",
+                    color: tier === "hf" ? "#00D4FF" : "#FF3B9A",
+                  }}>
+                    {tier === "hf" ? "🏦" : "🎭"}
+                  </span>
+                  {isMyAgent && (
+                    <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-green/15 text-neon-green border border-neon-green/30 font-display font-bold">FOLLOWING</span>
                   )}
-                  {isMe && (
-                    <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-green/15 text-neon-green border border-neon-green/30 font-display font-bold">YOU</span>
-                  )}
-                  {entry.user?.streak >= 5 && <span className="text-xs">🔥</span>}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[10px] text-[#888899] font-mono-num">
                     Sharpe {entry.sharpeRatio.toFixed(2)}
                   </span>
-                  {activeTab === "agents" && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A3E] text-[#888899]">
-                      {tier === "hf" ? category : entry.agent?.tradingStyle?.split("/")[0]}
-                    </span>
-                  )}
-                  {activeTab === "players" && entry.agent && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A3E] text-[#888899]">
-                      w/ {entry.agent.name}
-                    </span>
-                  )}
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#2A2A3E] text-[#888899]">
+                    {tier === "hf" ? category : entry.agent?.tradingStyle?.split("/")[0]}
+                  </span>
                   {staked > 0 && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-neon-gold/10 text-neon-gold font-mono-num">
                       💰 {staked.toLocaleString()}
@@ -467,8 +398,8 @@ export default function Arena() {
   );
 }
 
-function StatBar({ label, value, max, color, suffix = "", inverted = false }: {
-  label: string; value: number; max: number; color: string; suffix?: string; inverted?: boolean;
+function StatBar({ label, value, max, color, suffix = "" }: {
+  label: string; value: number; max: number; color: string; suffix?: string;
 }) {
   const pct = Math.min(Math.abs(value) / max * 100, 100);
   return (
@@ -478,7 +409,7 @@ function StatBar({ label, value, max, color, suffix = "", inverted = false }: {
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
       <span className="font-mono-num text-[10px] w-12 text-right" style={{ color }}>
-        {inverted ? "" : (value >= 0 ? "" : "")}{value.toFixed(1)}{suffix}
+        {value.toFixed(1)}{suffix}
       </span>
     </div>
   );

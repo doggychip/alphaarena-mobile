@@ -644,15 +644,20 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     if (!competition) return res.status(404).json({ message: "No active competition" });
 
     const entries = await storage.getLeaderboard(competition.id);
-    // Flag AI agent entries vs real player entries
-    // NPC agent users (ids 2-26) have emails like {type}@alpha.gg
-    // Real users: demo user (id 1) + any registered users (id > 26)
-    const NPC_AGENT_IDS = new Set([2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26]);
-    const enriched = entries.map(e => ({
-      ...e,
-      isAgent: NPC_AGENT_IDS.has(e.userId),
-    }));
-    res.json({ competition, entries: enriched });
+    // Arena is agents-only — filter out human players.
+    // Agent NPC users (ids 2-26) represent the built-in AI agents.
+    // External agent NPC users have emails ending in @external.alphaarena.gg.
+    // Everyone else (demo user id 1 + registered human players) is excluded.
+    const agentOnly = entries.filter(e => {
+      const uid = e.userId;
+      if (uid >= 2 && uid <= 26) return true; // built-in agent NPCs
+      const email = (e as any).user?.email || "";
+      if (email.endsWith("@external.alphaarena.gg")) return true; // external agent NPCs
+      return false;
+    });
+    // Re-rank agents 1..N
+    const ranked = agentOnly.map((e, i) => ({ ...e, rank: i + 1 }));
+    res.json({ competition, entries: ranked });
   });
 
   app.get("/api/competition", async (_req: Request, res: Response) => {
