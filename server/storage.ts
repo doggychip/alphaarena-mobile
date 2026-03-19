@@ -108,6 +108,7 @@ export interface IStorage {
   registerExternalAgent(agent: InsertExternalAgent): Promise<ExternalAgent>;
   getExternalAgent(agentId: string): Promise<ExternalAgent | undefined>;
   getExternalAgentByApiKey(apiKeyHash: string): Promise<ExternalAgent | undefined>;
+  getExternalAgentByUserId(userId: number): Promise<ExternalAgent | undefined>;
   getAllExternalAgents(): Promise<ExternalAgent[]>;
   updateExternalAgent(agentId: string, data: Partial<ExternalAgent>): Promise<ExternalAgent | undefined>;
 
@@ -1847,6 +1848,10 @@ export class MemStorage implements IStorage {
 
   async getExternalAgentByApiKey(apiKeyHash: string): Promise<ExternalAgent | undefined> {
     return Array.from(this.externalAgentsMap.values()).find(a => a.apiKey === apiKeyHash);
+  }
+
+  async getExternalAgentByUserId(userId: number): Promise<ExternalAgent | undefined> {
+    return Array.from(this.externalAgentsMap.values()).find(a => a.userId === userId);
   }
 
   async getAllExternalAgents(): Promise<ExternalAgent[]> {

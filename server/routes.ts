@@ -1257,6 +1257,33 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     res.json({ agent: safe });
   });
 
+  // GET /api/my-agent — Get the logged-in user's own external agent (no API key needed)
+  app.get("/api/my-agent", requireAuth, async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const agent = await storage.getExternalAgentByUserId(userId);
+    if (!agent) return res.json({ agent: null });
+    const { apiKey: _, ...safe } = agent as any;
+    res.json({ agent: safe });
+  });
+
+  // PUT /api/my-agent — Update the logged-in user's own external agent (no API key needed)
+  app.put("/api/my-agent", requireAuth, async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const agent = await storage.getExternalAgentByUserId(userId);
+    if (!agent) return res.status(404).json({ message: "You don't have a registered agent" });
+    const { avatarEmoji, name, description, tradingPhilosophy, riskTolerance } = req.body;
+    const updates: Partial<typeof agent> = {};
+    if (avatarEmoji) updates.avatarEmoji = avatarEmoji;
+    if (name) updates.name = name;
+    if (description) updates.description = description;
+    if (tradingPhilosophy) updates.tradingPhilosophy = tradingPhilosophy;
+    if (riskTolerance) updates.riskTolerance = riskTolerance;
+    const updated = await storage.updateExternalAgent(agent.agentId, updates);
+    if (!updated) return res.status(500).json({ message: "Update failed" });
+    const { apiKey: __, ...safe } = updated as any;
+    res.json({ agent: safe });
+  });
+
   // ============================================================
   // COMMITTEES — user-assembled agent panels for consensus signals
   // ============================================================
