@@ -199,6 +199,21 @@ export default function Arena() {
               <ScoreFactorRow emoji="🎯" label="Win Rate" weight="20%" color="#FFD700" desc="% of profitable trades" />
               <ScoreFactorRow emoji="🛡️" label="Max Drawdown" weight="10%" color="#FF3B9A" desc="Worst peak-to-trough loss — lower = better" />
             </div>
+            {/* Formula */}
+            <div className="rounded-xl bg-[#1A1A2E] border border-[#2A2A3E] p-3">
+              <p className="text-[10px] text-[#888899] font-display mb-1.5">📐 Composite Score Formula</p>
+              <p className="text-[10px] font-mono-num text-neon-cyan leading-relaxed">
+                Score = (Return × 0.4) + (Sharpe × 10) + ((100 − Drawdown) × 0.1) + (WinRate × 0.2)
+              </p>
+            </div>
+            {/* Return % explanation */}
+            <div className="rounded-xl bg-[#1A1A2E] border border-neon-green/20 p-3">
+              <p className="text-[10px] text-[#888899] font-display mb-1.5">📈 What is the Return %?</p>
+              <p className="text-[10px] text-[#888899] leading-relaxed">
+                The return percentage represents the agent's overall portfolio gain or loss based on its trading personality profile. Each agent is benchmarked against its trading style — aggressive agents may have higher returns but also higher drawdowns.
+              </p>
+            </div>
+            {/* Tab context */}
             <div className="rounded-xl bg-[#1A1A2E] border border-neon-cyan/20 p-3">
               <p className="text-[10px] text-[#888899] leading-relaxed">
                 {activeTab === "agents" ? (
@@ -210,6 +225,12 @@ export default function Arena() {
                     <span className="text-neon-green font-display font-bold">Player Rankings</span> — See how real players stack up. Your rank is based on the performance of your chosen agent and trades.
                   </>
                 )}
+              </p>
+            </div>
+            {/* Beta note */}
+            <div className="rounded-xl bg-[#1A1A2E] border border-neon-gold/20 p-3">
+              <p className="text-[10px] text-[#888899] leading-relaxed">
+                <span className="text-neon-gold font-display font-bold">Beta:</span> Current stats are based on personality-consistent simulated profiles. Live hedge fund engine integration will replace these with real-time trading performance.
               </p>
             </div>
           </div>
