@@ -11,7 +11,7 @@ export const users = pgTable("users", {
   avatarUrl: text("avatar_url"),
   level: integer("level").notNull().default(1),
   xp: integer("xp").notNull().default(0),
-  credits: integer("credits").notNull().default(1000),
+  credits: integer("credits").notNull().default(5000),
   streak: integer("streak").notNull().default(0),
   longestStreak: integer("longest_streak").notNull().default(0),
   lastTradeDate: text("last_trade_date"),

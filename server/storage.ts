@@ -1488,7 +1488,7 @@ export class MemStorage implements IStorage {
       avatarUrl: userData.avatarUrl ?? null,
       level: userData.level ?? 1,
       xp: userData.xp ?? 0,
-      credits: userData.credits ?? 1000,
+      credits: userData.credits ?? 5000,
       streak: userData.streak ?? 0,
       longestStreak: userData.longestStreak ?? 0,
       lastTradeDate: userData.lastTradeDate ?? null,

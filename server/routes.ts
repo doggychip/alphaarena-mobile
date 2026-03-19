@@ -221,7 +221,7 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
         avatarUrl: null,
         level: 1,
         xp: 0,
-        credits: 1000,
+        credits: 5000,
         streak: 0,
         longestStreak: 0,
         lastTradeDate: null,
@@ -258,7 +258,7 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
             avatarUrl: null,
             level: 1,
             xp: 0,
-            credits: 1000,
+            credits: 5000,
             streak: 0,
             longestStreak: 0,
             lastTradeDate: null,
@@ -280,8 +280,15 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) return next(err);
       if (!user) return res.status(401).json({ message: info?.message || "Invalid credentials" });
-      req.logIn(user, (loginErr) => {
+      req.logIn(user, async (loginErr) => {
         if (loginErr) return next(loginErr);
+        // Grant startup capital to existing users who have 0 credits
+        if (user.credits === 0) {
+          const STARTUP_CAPITAL = 5000;
+          await storage.updateUser(user.id, { credits: STARTUP_CAPITAL });
+          user.credits = STARTUP_CAPITAL;
+          console.log(`[StartupCapital] Granted ${STARTUP_CAPITAL} credits to user ${user.id} (${user.username})`);
+        }
         const { password: _pw, ...safeUser } = user;
         return res.json({ user: safeUser });
       });
@@ -1199,7 +1206,8 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
       agentId: a.agentId, name: a.name, description: a.description,
       avatarEmoji: a.avatarEmoji, source: a.source, reputation: a.reputation,
       totalSignals: a.totalSignals, totalPosts: a.totalPosts,
-      tradingPhilosophy: a.tradingPhilosophy, registeredAt: a.registeredAt,
+      tradingPhilosophy: a.tradingPhilosophy, riskTolerance: a.riskTolerance,
+      registeredAt: a.registeredAt, lastActiveAt: a.lastActiveAt,
     })));
   });
 

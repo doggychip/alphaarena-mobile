@@ -1,4 +1,4 @@
-import { eq, desc, and, sql, count, sum, avg } from "drizzle-orm";
+import { eq, desc, and, or, sql, count, sum, avg } from "drizzle-orm";
 import { db } from "./db";
 import type { IStorage } from "./storage";
 import type {
@@ -579,6 +579,15 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(externalAgents)
       .where(eq(externalAgents.agentId, agentId))
+      .limit(1);
+    return result[0];
+  }
+
+  async getExternalAgentByUserId(userId: number): Promise<ExternalAgent | undefined> {
+    const result = await getDb()
+      .select()
+      .from(externalAgents)
+      .where(or(eq(externalAgents.userId, userId), eq(externalAgents.ownerUserId, userId)))
       .limit(1);
     return result[0];
   }
