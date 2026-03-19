@@ -92,32 +92,75 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [slideDirection, setSlideDirection] = useState<"left" | "right">("left");
   const [isPaused, setIsPaused] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const isSwiping = useRef(false);
 
   const totalAgents = allAgents.current.length || 1;
 
   const goToNext = useCallback(() => {
     if (allAgents.current.length <= 1) return;
+    setSlideDirection("left");
     setIsTransitioning(true);
     setTimeout(() => {
       setActiveIndex(prev => (prev + 1) % allAgents.current.length);
       setIsTransitioning(false);
-    }, 300);
+    }, 250);
   }, []);
+
+  const goToPrev = useCallback(() => {
+    if (allAgents.current.length <= 1) return;
+    setSlideDirection("right");
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setActiveIndex(prev => (prev - 1 + allAgents.current.length) % allAgents.current.length);
+      setIsTransitioning(false);
+    }, 250);
+  }, []);
+
+  const goToIndex = useCallback((idx: number) => {
+    if (idx === activeIndex) return;
+    setSlideDirection(idx > activeIndex ? "left" : "right");
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setActiveIndex(idx);
+      setIsTransitioning(false);
+    }, 250);
+  }, [activeIndex]);
 
   useEffect(() => {
     if (isPaused || allAgents.current.length <= 1) return;
-    timerRef.current = setInterval(goToNext, 4000);
+    timerRef.current = setInterval(goToNext, 5000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [isPaused, goToNext, allMemeAgents, allHfAgents]);
 
-  // Pause on touch
-  const handleTouchStart = () => setIsPaused(true);
-  const handleTouchEnd = () => {
-    setTimeout(() => setIsPaused(false), 2000);
+  // Swipe handling
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    isSwiping.current = false;
+    setIsPaused(true);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const dx = Math.abs(e.touches[0].clientX - touchStartX.current);
+    const dy = Math.abs(e.touches[0].clientY - touchStartY.current);
+    if (dx > 10 && dx > dy) {
+      isSwiping.current = true;
+    }
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    if (isSwiping.current && Math.abs(dx) > 40) {
+      if (dx < 0) goToNext();
+      else goToPrev();
+    }
+    isSwiping.current = false;
+    setTimeout(() => setIsPaused(false), 3000);
   };
 
   const displayed = allAgents.current[activeIndex] || { agent: currentAgent, tier: agentTier };
@@ -127,17 +170,21 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
   const isCurrentAgent = activeIndex === 0;
 
   return (
-    <Link href="/pick-agent">
       <div
-        className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4 cursor-pointer active:scale-[0.98] transition-transform"
+        className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4 overflow-hidden touch-pan-y"
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={() => setIsPaused(false)}
       >
         <div
-          className={`transition-all duration-300 ease-in-out ${
-            isTransitioning ? "opacity-0 translate-x-4" : "opacity-100 translate-x-0"
+          className={`transition-all duration-250 ease-in-out ${
+            isTransitioning
+              ? slideDirection === "left"
+                ? "opacity-0 -translate-x-6"
+                : "opacity-0 translate-x-6"
+              : "opacity-100 translate-x-0"
           }`}
         >
           <div className="flex items-start gap-3">
@@ -214,7 +261,7 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
                   className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Follow Agent's Play
+                  View Signals
                 </button>
               </Link>
             ) : (
@@ -224,7 +271,7 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
                   className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  Follow Agent's Play
+                  View Signals
                 </button>
               </Link>
             )}
@@ -235,15 +282,16 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
           </div>
         )}
 
-        {/* Carousel dots */}
-        <div className="mt-3 flex items-center justify-center gap-1">
+        {/* Carousel dots — tappable */}
+        <div className="mt-3 flex items-center justify-center gap-1.5">
           {Array.from({ length: Math.min(totalAgents, 12) }).map((_, i) => (
-            <div
+            <button
               key={i}
+              onClick={() => goToIndex(i)}
               className={`rounded-full transition-all duration-300 ${
                 i === activeIndex % Math.min(totalAgents, 12)
-                  ? "w-4 h-1.5 bg-neon-cyan"
-                  : "w-1.5 h-1.5 bg-[#2A2A3E]"
+                  ? "w-5 h-2 bg-neon-cyan"
+                  : "w-2 h-2 bg-[#2A2A3E] active:bg-[#555566]"
               }`}
             />
           ))}
@@ -251,8 +299,12 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
             <span className="text-[8px] text-[#555566] ml-1">+{totalAgents - 12}</span>
           )}
         </div>
+
+        {/* Swipe hint (shown briefly) */}
+        {activeIndex === 0 && (
+          <p className="text-center text-[9px] text-[#555566] font-display mt-1.5">← swipe to browse agents →</p>
+        )}
       </div>
-    </Link>
   );
 }
 
