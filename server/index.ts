@@ -26,6 +26,9 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// Trust reverse proxy (Zeabur / nginx) — needed for secure cookies behind TLS termination
+app.set("trust proxy", 1);
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -83,7 +86,9 @@ app.use((req, res, next) => {
       resave: false,
       saveUninitialized: false,
       cookie: {
-        secure: process.env.NODE_ENV === "production" && !!process.env.HTTPS,
+        secure: process.env.NODE_ENV === "production",
+        httpOnly: true,
+        sameSite: "lax" as const,
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       },
     })

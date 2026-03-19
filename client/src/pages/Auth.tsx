@@ -13,10 +13,11 @@ export default function Auth() {
   const { login, register } = useAuth();
   const [, navigate] = useLocation();
 
-  const [loginUsername, setLoginUsername] = useState("");
+  const [loginUsername, setLoginUsername] = useState(() => localStorage.getItem("alphaarena_username") || "");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => !!localStorage.getItem("alphaarena_username"));
 
   const [regUsername, setRegUsername] = useState("");
   const [regEmail, setRegEmail] = useState("");
@@ -30,6 +31,11 @@ export default function Auth() {
     setLoginLoading(true);
     try {
       await login(loginUsername, loginPassword);
+      if (rememberMe) {
+        localStorage.setItem("alphaarena_username", loginUsername);
+      } else {
+        localStorage.removeItem("alphaarena_username");
+      }
       navigate("/");
     } catch (err: any) {
       setLoginError(err?.message || "Invalid username or password.");
@@ -44,6 +50,8 @@ export default function Auth() {
     setRegLoading(true);
     try {
       await register(regUsername, regEmail, regPassword);
+      // Auto-remember after registration
+      localStorage.setItem("alphaarena_username", regUsername);
       navigate("/");
     } catch (err: any) {
       setRegError(err?.message || "Registration failed. Try a different username.");
@@ -151,6 +159,17 @@ export default function Auth() {
                     className="bg-[#0A0A0F] border-[#2A2A3E] text-[#E8E8E8] placeholder-[#555566] focus:border-neon-green focus:ring-neon-green/20 h-11"
                   />
                 </div>
+
+                {/* Remember Me */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded border-[#2A2A3E] bg-[#0A0A0F] text-neon-green accent-[#00FF88] cursor-pointer"
+                  />
+                  <span className="text-xs text-[#888899] font-display">Remember me</span>
+                </label>
 
                 {loginError && (
                   <div className="rounded-lg border border-[#FF3B9A]/30 bg-[#FF3B9A]/10 px-3 py-2 text-xs text-[#FF3B9A] font-display">
