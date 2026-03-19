@@ -90,8 +90,42 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     }
   });
 
-  // Login
-  app.post("/api/auth/login", (req: Request, res: Response, next: NextFunction) => {
+  // Login — with auto-register for MemStorage (no DB) when account is lost on restart
+  app.post("/api/auth/login", async (req: Request, res: Response, next: NextFunction) => {
+    const { username, password, autoRegister } = req.body;
+
+    // If autoRegister flag is set and user not found, create the account automatically
+    if (autoRegister) {
+      const existing = await storage.getUserByUsername(username);
+      if (!existing && username && password) {
+        try {
+          const hashedPassword = await bcrypt.hash(password, 12);
+          const user = await storage.createUser({
+            username,
+            email: `${username.toLowerCase().replace(/\s+/g, "_")}@alphaarena.gg`,
+            password: hashedPassword,
+            avatarUrl: null,
+            level: 1,
+            xp: 0,
+            credits: 1000,
+            streak: 0,
+            longestStreak: 0,
+            lastTradeDate: null,
+            selectedAgentType: "bull",
+            createdAt: new Date().toISOString(),
+          });
+          return req.logIn(user, (err) => {
+            if (err) return next(err);
+            const { password: _pw, ...safeUser } = user as any;
+            return res.json({ user: safeUser, autoRegistered: true });
+          });
+        } catch (err: any) {
+          console.error("Auto-register error:", err);
+          // Fall through to normal login flow
+        }
+      }
+    }
+
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) return next(err);
       if (!user) return res.status(401).json({ message: info?.message || "Invalid credentials" });

@@ -38,13 +38,25 @@ export default function Auth() {
       } else {
         localStorage.removeItem("alphaarena_username");
       }
+      // Navigate home — React state is already updated via query cache
       navigate("/");
     } catch (err: any) {
       const msg = err?.message || "Invalid username or password.";
-      setLoginError(msg);
-      // If account not found, show the register prompt
+      // If account not found, auto-register and log in seamlessly
       if (msg.toLowerCase().includes("not found") || msg.toLowerCase().includes("register")) {
-        setShowAccountNotFound(true);
+        try {
+          await login(loginUsername, loginPassword, true);
+          if (rememberMe) {
+            localStorage.setItem("alphaarena_username", loginUsername);
+          }
+          navigate("/");
+          return;
+        } catch (retryErr: any) {
+          setLoginError(retryErr?.message || "Auto-registration failed. Please register manually.");
+          setShowAccountNotFound(true);
+        }
+      } else {
+        setLoginError(msg);
       }
     } finally {
       setLoginLoading(false);
