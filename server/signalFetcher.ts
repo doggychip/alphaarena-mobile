@@ -89,13 +89,14 @@ async function fetchSignals(): Promise<void> {
     // Transform signals
     const { storage } = await import("./storage");
     const signals: any[] = [];
-    let nextId = storage.getLatestSignals(1)[0]?.id ?? 1000;
+    const latestSignals = await storage.getLatestSignals(1);
+    let nextId = latestSignals[0]?.id ?? 1000;
 
     for (const [agentKey, tickerSignals] of Object.entries(data.analyst_signals)) {
       const agentId = AGENT_KEY_MAP[agentKey] || agentKey.replace(/_agent$/, "");
 
       // Verify this agent exists in our system
-      const hfAgent = storage.getHedgeFundAgent(agentId);
+      const hfAgent = await storage.getHedgeFundAgent(agentId);
       if (!hfAgent) {
         console.log(`[SignalFetcher] Unknown agent: ${agentKey} → ${agentId}, skipping`);
         continue;

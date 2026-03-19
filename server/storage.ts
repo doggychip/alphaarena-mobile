@@ -18,77 +18,83 @@ import type {
 
 export interface IStorage {
   // Users
-  getUser(id: number): User | undefined;
-  getAllUsers(): User[];
-  updateUser(id: number, data: Partial<User>): User | undefined;
+  getUser(id: number): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
+  updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  createUser(user: InsertUser & { password: string }): Promise<User>;
 
   // Agents
-  getAgent(type: string): Agent | undefined;
-  getAllAgents(): Agent[];
+  getAgent(type: string): Promise<Agent | undefined>;
+  getAllAgents(): Promise<Agent[]>;
 
   // Competitions
-  getActiveCompetition(): Competition | undefined;
+  getActiveCompetition(): Promise<Competition | undefined>;
 
   // Portfolios
-  getPortfolio(userId: number): Portfolio | undefined;
-  updatePortfolio(id: number, data: Partial<Portfolio>): Portfolio | undefined;
+  getPortfolio(userId: number): Promise<Portfolio | undefined>;
+  updatePortfolio(id: number, data: Partial<Portfolio>): Promise<Portfolio | undefined>;
 
   // Positions
-  getPositions(portfolioId: number): Position[];
-  addPosition(pos: InsertPosition): Position;
+  getPositions(portfolioId: number): Promise<Position[]>;
+  addPosition(pos: InsertPosition): Promise<Position>;
 
   // Trades
-  getTrades(portfolioId: number): Trade[];
-  addTrade(trade: InsertTrade): Trade;
+  getTrades(portfolioId: number): Promise<Trade[]>;
+  addTrade(trade: InsertTrade): Promise<Trade>;
 
   // Daily Snapshots
-  getSnapshots(portfolioId: number): DailySnapshot[];
+  getSnapshots(portfolioId: number): Promise<DailySnapshot[]>;
 
   // Leaderboard
-  getLeaderboard(competitionId: number): (LeaderboardEntry & { user: User; agent: Agent })[];
-  getLeaderboardEntry(userId: number): LeaderboardEntry | undefined;
+  getLeaderboard(competitionId: number): Promise<(LeaderboardEntry & { user: User; agent: Agent })[]>;
+  getLeaderboardEntry(userId: number): Promise<LeaderboardEntry | undefined>;
 
   // Achievements
-  getUserAchievements(userId: number): Achievement[];
-  addAchievement(ach: InsertAchievement): Achievement;
+  getUserAchievements(userId: number): Promise<Achievement[]>;
+  addAchievement(ach: InsertAchievement): Promise<Achievement>;
 
   // Agent Messages
-  getAgentMessages(agentType: string, mood?: string): AgentMessage[];
-  getRandomAgentMessage(agentType: string, mood?: string): AgentMessage | undefined;
+  getAgentMessages(agentType: string, mood?: string): Promise<AgentMessage[]>;
+  getRandomAgentMessage(agentType: string, mood?: string): Promise<AgentMessage | undefined>;
 
   // Staking
-  getStakesByStaker(stakerId: number): Stake[];
-  getStakesByTarget(targetUserId: number): Stake[];
-  getStake(stakerId: number, targetUserId: number): Stake | undefined;
-  getTotalStakedOnUser(targetUserId: number): number;
-  addStake(stake: InsertStake): Stake;
-  removeStake(stakerId: number, targetUserId: number): boolean;
-  updateStake(stakerId: number, targetUserId: number, amount: number): Stake | undefined;
+  getStakesByStaker(stakerId: number): Promise<Stake[]>;
+  getStakesByTarget(targetUserId: number): Promise<Stake[]>;
+  getStake(stakerId: number, targetUserId: number): Promise<Stake | undefined>;
+  getTotalStakedOnUser(targetUserId: number): Promise<number>;
+  addStake(stake: InsertStake): Promise<Stake>;
+  removeStake(stakerId: number, targetUserId: number): Promise<boolean>;
+  updateStake(stakerId: number, targetUserId: number, amount: number): Promise<Stake | undefined>;
 
   // Staking Rewards
-  getRewardsByStaker(stakerId: number): StakingReward[];
-  addReward(reward: InsertStakingReward): StakingReward;
-  getStakingLeaderboard(): { targetUserId: number; totalStaked: number; stakerCount: number }[];
+  getRewardsByStaker(stakerId: number): Promise<StakingReward[]>;
+  addReward(reward: InsertStakingReward): Promise<StakingReward>;
+  getStakingLeaderboard(): Promise<{ targetUserId: number; totalStaked: number; stakerCount: number }[]>;
 
   // Hedge Fund Agents
-  getHedgeFundAgent(agentId: string): HedgeFundAgent | undefined;
-  getAllHedgeFundAgents(): HedgeFundAgent[];
-  getHedgeFundAgentsByCategory(category: string): HedgeFundAgent[];
+  getHedgeFundAgent(agentId: string): Promise<HedgeFundAgent | undefined>;
+  getAllHedgeFundAgents(): Promise<HedgeFundAgent[]>;
+  getHedgeFundAgentsByCategory(category: string): Promise<HedgeFundAgent[]>;
 
   // Agent Signals
-  getSignalsByAgent(agentId: string, limit?: number): AgentSignal[];
-  getSignalsByTicker(ticker: string, limit?: number): AgentSignal[];
-  getLatestSignals(limit?: number): AgentSignal[];
-  getLatestSignalByAgent(agentId: string, ticker?: string): AgentSignal | undefined;
-  getAgentSignalStats(agentId: string): { winRate: number; totalSignals: number; avgConfidence: number };
+  getSignalsByAgent(agentId: string, limit?: number): Promise<AgentSignal[]>;
+  getSignalsByTicker(ticker: string, limit?: number): Promise<AgentSignal[]>;
+  getLatestSignals(limit?: number): Promise<AgentSignal[]>;
+  getLatestSignalByAgent(agentId: string, ticker?: string): Promise<AgentSignal | undefined>;
+  getAgentSignalStats(agentId: string): Promise<{ winRate: number; totalSignals: number; avgConfidence: number }>;
 
   // Meme ↔ HF Mapping
-  getMemeAgentMapping(memeAgentType: string): MemeAgentMapping[];
-  getCompositeSignal(memeAgentType: string, ticker: string): { signal: string; confidence: number; contributors: any[] } | undefined;
+  getMemeAgentMapping(memeAgentType: string): Promise<MemeAgentMapping[]>;
+  getCompositeSignal(memeAgentType: string, ticker: string): Promise<{ signal: string; confidence: number; contributors: any[] } | undefined>;
 
   // HF Agent Staking
-  getHfAgentStakes(stakerId: number): { hedgeFundAgentId: string; amount: number; stakedAt: string }[];
-  addHfAgentStake(stakerId: number, hedgeFundAgentId: string, amount: number): void;
+  getHfAgentStakes(stakerId: number): Promise<{ hedgeFundAgentId: string; amount: number; stakedAt: string }[]>;
+  addHfAgentStake(stakerId: number, hedgeFundAgentId: string, amount: number): Promise<void>;
+
+  // Live Signal Ingestion
+  getSignalSource(): Promise<{ source: string; lastFetch: string | null; liveSignalCount: number }>;
+  ingestLiveSignals(signals: AgentSignal[]): Promise<void>;
 }
 
 // Seed data
@@ -142,6 +148,7 @@ function generateSeedData() {
   const users: User[] = [
     {
       id: 1, username: "DegenRyan", email: "ryan@alpha.gg",
+      password: null,
       avatarUrl: null, level: 12, xp: 3400, credits: 5000, streak: 7,
       longestStreak: 14, lastTradeDate: now.toISOString().split("T")[0],
       selectedAgentType: "bull", createdAt: new Date(now.getTime() - 30 * 86400000).toISOString(),
@@ -153,6 +160,7 @@ function generateSeedData() {
       id: def.id,
       username: def.username,
       email: `${def.selectedAgentType}@alpha.gg`,
+      password: null,
       avatarUrl: null,
       level: def.level,
       xp: def.level * 200 + Math.floor(Math.random() * 400),
@@ -1036,15 +1044,15 @@ export class MemStorage implements IStorage {
     this.memeAgentMappings = seed.memeAgentMappingSeed;
   }
 
-  getUser(id: number): User | undefined {
+  async getUser(id: number): Promise<User | undefined> {
     return this.users.get(id);
   }
 
-  getAllUsers(): User[] {
+  async getAllUsers(): Promise<User[]> {
     return Array.from(this.users.values());
   }
 
-  updateUser(id: number, data: Partial<User>): User | undefined {
+  async updateUser(id: number, data: Partial<User>): Promise<User | undefined> {
     const user = this.users.get(id);
     if (!user) return undefined;
     const updated = { ...user, ...data };
@@ -1052,25 +1060,52 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  getAgent(type: string): Agent | undefined {
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      u => u.username.toLowerCase() === username.toLowerCase()
+    );
+  }
+
+  async createUser(userData: InsertUser & { password: string }): Promise<User> {
+    const id = Math.max(0, ...Array.from(this.users.keys())) + 1;
+    const user: User = {
+      id,
+      username: userData.username,
+      email: userData.email,
+      password: userData.password,
+      avatarUrl: userData.avatarUrl ?? null,
+      level: userData.level ?? 1,
+      xp: userData.xp ?? 0,
+      credits: userData.credits ?? 1000,
+      streak: userData.streak ?? 0,
+      longestStreak: userData.longestStreak ?? 0,
+      lastTradeDate: userData.lastTradeDate ?? null,
+      selectedAgentType: userData.selectedAgentType ?? "bull",
+      createdAt: userData.createdAt ?? new Date().toISOString(),
+    };
+    this.users.set(id, user);
+    return user;
+  }
+
+  async getAgent(type: string): Promise<Agent | undefined> {
     return this.agents.get(type);
   }
 
-  getAllAgents(): Agent[] {
+  async getAllAgents(): Promise<Agent[]> {
     return Array.from(this.agents.values());
   }
 
-  getActiveCompetition(): Competition | undefined {
+  async getActiveCompetition(): Promise<Competition | undefined> {
     return Array.from(this.competitions.values()).find(c => c.status === "active");
   }
 
-  getPortfolio(userId: number): Portfolio | undefined {
+  async getPortfolio(userId: number): Promise<Portfolio | undefined> {
     return this.portfolios.get(userId);
   }
 
-  updatePortfolio(id: number, data: Partial<Portfolio>): Portfolio | undefined {
+  async updatePortfolio(id: number, data: Partial<Portfolio>): Promise<Portfolio | undefined> {
     // Find by id
-    for (const [userId, p] of this.portfolios.entries()) {
+    for (const [userId, p] of Array.from(this.portfolios.entries())) {
       if (p.id === id) {
         const updated = { ...p, ...data };
         this.portfolios.set(userId, updated);
@@ -1080,35 +1115,35 @@ export class MemStorage implements IStorage {
     return undefined;
   }
 
-  getPositions(portfolioId: number): Position[] {
+  async getPositions(portfolioId: number): Promise<Position[]> {
     return this.positions.get(portfolioId) || [];
   }
 
-  addPosition(pos: InsertPosition): Position {
-    const newPos: Position = { ...pos, id: this.nextPositionId++ };
+  async addPosition(pos: InsertPosition): Promise<Position> {
+    const newPos: Position = { unrealizedPnl: 0, ...pos, id: this.nextPositionId++ };
     const existing = this.positions.get(pos.portfolioId) || [];
     existing.push(newPos);
     this.positions.set(pos.portfolioId, existing);
     return newPos;
   }
 
-  getTrades(portfolioId: number): Trade[] {
+  async getTrades(portfolioId: number): Promise<Trade[]> {
     return this.trades.get(portfolioId) || [];
   }
 
-  addTrade(trade: InsertTrade): Trade {
-    const newTrade: Trade = { ...trade, id: this.nextTradeId++ };
+  async addTrade(trade: InsertTrade): Promise<Trade> {
+    const newTrade: Trade = { fee: 0, ...trade, id: this.nextTradeId++ };
     const existing = this.trades.get(trade.portfolioId) || [];
     existing.push(newTrade);
     this.trades.set(trade.portfolioId, existing);
     return newTrade;
   }
 
-  getSnapshots(portfolioId: number): DailySnapshot[] {
+  async getSnapshots(portfolioId: number): Promise<DailySnapshot[]> {
     return this.snapshots.get(portfolioId) || [];
   }
 
-  getLeaderboard(competitionId: number): (LeaderboardEntry & { user: User; agent: Agent })[] {
+  async getLeaderboard(competitionId: number): Promise<(LeaderboardEntry & { user: User; agent: Agent })[]> {
     return this.leaderboard
       .filter(e => e.competitionId === competitionId)
       .sort((a, b) => a.rank - b.rank)
@@ -1133,15 +1168,15 @@ export class MemStorage implements IStorage {
       .filter(e => e.user && e.agent);
   }
 
-  getLeaderboardEntry(userId: number): LeaderboardEntry | undefined {
+  async getLeaderboardEntry(userId: number): Promise<LeaderboardEntry | undefined> {
     return this.leaderboard.find(e => e.userId === userId);
   }
 
-  getUserAchievements(userId: number): Achievement[] {
+  async getUserAchievements(userId: number): Promise<Achievement[]> {
     return this.achievements.get(userId) || [];
   }
 
-  addAchievement(ach: InsertAchievement): Achievement {
+  async addAchievement(ach: InsertAchievement): Promise<Achievement> {
     const newAch: Achievement = { ...ach, id: this.nextAchievementId++ };
     const existing = this.achievements.get(ach.userId) || [];
     existing.push(newAch);
@@ -1149,7 +1184,7 @@ export class MemStorage implements IStorage {
     return newAch;
   }
 
-  getAgentMessages(agentType: string, mood?: string): AgentMessage[] {
+  async getAgentMessages(agentType: string, mood?: string): Promise<AgentMessage[]> {
     return this.agentMessages.filter(m => {
       if (m.agentType !== agentType) return false;
       if (mood && m.mood !== mood) return false;
@@ -1157,43 +1192,43 @@ export class MemStorage implements IStorage {
     });
   }
 
-  getRandomAgentMessage(agentType: string, mood?: string): AgentMessage | undefined {
-    const msgs = this.getAgentMessages(agentType, mood);
+  async getRandomAgentMessage(agentType: string, mood?: string): Promise<AgentMessage | undefined> {
+    const msgs = await this.getAgentMessages(agentType, mood);
     if (msgs.length === 0) return undefined;
     return msgs[Math.floor(Math.random() * msgs.length)];
   }
 
   // Staking
-  getStakesByStaker(stakerId: number): Stake[] {
+  async getStakesByStaker(stakerId: number): Promise<Stake[]> {
     return this.stakes.filter(s => s.stakerId === stakerId);
   }
 
-  getStakesByTarget(targetUserId: number): Stake[] {
+  async getStakesByTarget(targetUserId: number): Promise<Stake[]> {
     return this.stakes.filter(s => s.targetUserId === targetUserId);
   }
 
-  getStake(stakerId: number, targetUserId: number): Stake | undefined {
+  async getStake(stakerId: number, targetUserId: number): Promise<Stake | undefined> {
     return this.stakes.find(s => s.stakerId === stakerId && s.targetUserId === targetUserId);
   }
 
-  getTotalStakedOnUser(targetUserId: number): number {
+  async getTotalStakedOnUser(targetUserId: number): Promise<number> {
     return this.stakes.filter(s => s.targetUserId === targetUserId).reduce((sum, s) => sum + s.amount, 0);
   }
 
-  addStake(stake: InsertStake): Stake {
+  async addStake(stake: InsertStake): Promise<Stake> {
     const newStake: Stake = { ...stake, id: this.nextStakeId++ };
     this.stakes.push(newStake);
     return newStake;
   }
 
-  removeStake(stakerId: number, targetUserId: number): boolean {
+  async removeStake(stakerId: number, targetUserId: number): Promise<boolean> {
     const idx = this.stakes.findIndex(s => s.stakerId === stakerId && s.targetUserId === targetUserId);
     if (idx === -1) return false;
     this.stakes.splice(idx, 1);
     return true;
   }
 
-  updateStake(stakerId: number, targetUserId: number, amount: number): Stake | undefined {
+  async updateStake(stakerId: number, targetUserId: number, amount: number): Promise<Stake | undefined> {
     const stake = this.stakes.find(s => s.stakerId === stakerId && s.targetUserId === targetUserId);
     if (!stake) return undefined;
     stake.amount = amount;
@@ -1201,17 +1236,17 @@ export class MemStorage implements IStorage {
   }
 
   // Staking Rewards
-  getRewardsByStaker(stakerId: number): StakingReward[] {
+  async getRewardsByStaker(stakerId: number): Promise<StakingReward[]> {
     return this.stakingRewards.filter(r => r.stakerId === stakerId).sort((a, b) => new Date(b.earnedAt).getTime() - new Date(a.earnedAt).getTime());
   }
 
-  addReward(reward: InsertStakingReward): StakingReward {
+  async addReward(reward: InsertStakingReward): Promise<StakingReward> {
     const newReward: StakingReward = { ...reward, id: this.nextRewardId++ };
     this.stakingRewards.push(newReward);
     return newReward;
   }
 
-  getStakingLeaderboard(): { targetUserId: number; totalStaked: number; stakerCount: number }[] {
+  async getStakingLeaderboard(): Promise<{ targetUserId: number; totalStaked: number; stakerCount: number }[]> {
     const map = new Map<number, { totalStaked: number; stakers: Set<number> }>();
     for (const s of this.stakes) {
       if (!map.has(s.targetUserId)) map.set(s.targetUserId, { totalStaked: 0, stakers: new Set() });
@@ -1226,47 +1261,47 @@ export class MemStorage implements IStorage {
 
   // === Hedge Fund Agents ===
 
-  getHedgeFundAgent(agentId: string): HedgeFundAgent | undefined {
+  async getHedgeFundAgent(agentId: string): Promise<HedgeFundAgent | undefined> {
     return this.hedgeFundAgentsMap.get(agentId);
   }
 
-  getAllHedgeFundAgents(): HedgeFundAgent[] {
+  async getAllHedgeFundAgents(): Promise<HedgeFundAgent[]> {
     return Array.from(this.hedgeFundAgentsMap.values());
   }
 
-  getHedgeFundAgentsByCategory(category: string): HedgeFundAgent[] {
-    return this.getAllHedgeFundAgents().filter(a => a.category === category);
+  async getHedgeFundAgentsByCategory(category: string): Promise<HedgeFundAgent[]> {
+    return (await this.getAllHedgeFundAgents()).filter(a => a.category === category);
   }
 
   // === Agent Signals ===
 
-  getSignalsByAgent(agentId: string, limit?: number): AgentSignal[] {
+  async getSignalsByAgent(agentId: string, limit?: number): Promise<AgentSignal[]> {
     const signals = this.agentSignalsData
       .filter(s => s.hedgeFundAgentId === agentId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return limit ? signals.slice(0, limit) : signals;
   }
 
-  getSignalsByTicker(ticker: string, limit?: number): AgentSignal[] {
+  async getSignalsByTicker(ticker: string, limit?: number): Promise<AgentSignal[]> {
     const signals = this.agentSignalsData
       .filter(s => s.ticker === ticker)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return limit ? signals.slice(0, limit) : signals;
   }
 
-  getLatestSignals(limit?: number): AgentSignal[] {
+  async getLatestSignals(limit?: number): Promise<AgentSignal[]> {
     const sorted = [...this.agentSignalsData].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return limit ? sorted.slice(0, limit) : sorted;
   }
 
-  getLatestSignalByAgent(agentId: string, ticker?: string): AgentSignal | undefined {
+  async getLatestSignalByAgent(agentId: string, ticker?: string): Promise<AgentSignal | undefined> {
     const signals = this.agentSignalsData
       .filter(s => s.hedgeFundAgentId === agentId && (!ticker || s.ticker === ticker))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return signals[0];
   }
 
-  getAgentSignalStats(agentId: string): { winRate: number; totalSignals: number; avgConfidence: number } {
+  async getAgentSignalStats(agentId: string): Promise<{ winRate: number; totalSignals: number; avgConfidence: number }> {
     const agent = this.hedgeFundAgentsMap.get(agentId);
     if (!agent) return { winRate: 0, totalSignals: 0, avgConfidence: 0 };
     return { winRate: agent.winRate, totalSignals: agent.totalSignals, avgConfidence: agent.avgConfidence };
@@ -1274,12 +1309,12 @@ export class MemStorage implements IStorage {
 
   // === Meme ↔ HF Mapping ===
 
-  getMemeAgentMapping(memeAgentType: string): MemeAgentMapping[] {
+  async getMemeAgentMapping(memeAgentType: string): Promise<MemeAgentMapping[]> {
     return this.memeAgentMappings.filter(m => m.memeAgentType === memeAgentType);
   }
 
-  getCompositeSignal(memeAgentType: string, ticker: string): { signal: string; confidence: number; contributors: any[] } | undefined {
-    const mappings = this.getMemeAgentMapping(memeAgentType);
+  async getCompositeSignal(memeAgentType: string, ticker: string): Promise<{ signal: string; confidence: number; contributors: any[] } | undefined> {
+    const mappings = await this.getMemeAgentMapping(memeAgentType);
     if (mappings.length === 0) return undefined;
 
     let bullishScore = 0;
@@ -1289,7 +1324,7 @@ export class MemStorage implements IStorage {
     const contributors: any[] = [];
 
     for (const mapping of mappings) {
-      const latest = this.getLatestSignalByAgent(mapping.hedgeFundAgentId, ticker);
+      const latest = await this.getLatestSignalByAgent(mapping.hedgeFundAgentId, ticker);
       const agent = this.hedgeFundAgentsMap.get(mapping.hedgeFundAgentId);
       if (!latest || !agent) continue;
 
@@ -1323,11 +1358,11 @@ export class MemStorage implements IStorage {
 
   // === HF Agent Staking ===
 
-  getHfAgentStakes(stakerId: number): { hedgeFundAgentId: string; amount: number; stakedAt: string }[] {
+  async getHfAgentStakes(stakerId: number): Promise<{ hedgeFundAgentId: string; amount: number; stakedAt: string }[]> {
     return this.hfAgentStakes.filter(s => s.stakerId === stakerId);
   }
 
-  addHfAgentStake(stakerId: number, hedgeFundAgentId: string, amount: number): void {
+  async addHfAgentStake(stakerId: number, hedgeFundAgentId: string, amount: number): Promise<void> {
     const existing = this.hfAgentStakes.find(s => s.stakerId === stakerId && s.hedgeFundAgentId === hedgeFundAgentId);
     if (existing) {
       existing.amount += amount;
@@ -1342,12 +1377,12 @@ export class MemStorage implements IStorage {
   private _signalSource: "simulated" | "live" = "simulated";
   private _lastLiveFetch: string | null = null;
 
-  getSignalSource(): { source: string; lastFetch: string | null; liveSignalCount: number } {
+  async getSignalSource(): Promise<{ source: string; lastFetch: string | null; liveSignalCount: number }> {
     const liveCount = this.agentSignalsData.filter(s => (s as any)._isLive).length;
     return { source: this._signalSource, lastFetch: this._lastLiveFetch, liveSignalCount: liveCount };
   }
 
-  ingestLiveSignals(signals: AgentSignal[]): void {
+  async ingestLiveSignals(signals: AgentSignal[]): Promise<void> {
     for (const signal of signals) {
       // Check for duplicates
       const isDupe = this.agentSignalsData.some(
@@ -1387,4 +1422,6 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+import { DatabaseStorage } from "./dbStorage";
+import { db } from "./db";
+export const storage: IStorage = db ? new DatabaseStorage() : new MemStorage();

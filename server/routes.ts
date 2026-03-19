@@ -1,10 +1,36 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import type { Server } from "http";
+import passport from "passport";
+import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { startPriceEngine, getCurrentPrices, getPriceForPair } from "./prices";
 import { startSignalFetcher, getSignalFetchStatus } from "./signalFetcher";
 
-const DEMO_USER_ID = 1;
+// Type augmentation for passport session user
+declare global {
+  namespace Express {
+    interface User {
+      id: number;
+      username: string;
+      email: string;
+      password?: string | null;
+      [key: string]: any;
+    }
+  }
+}
+
+// Auth middleware — returns 401 if not logged in
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ message: "Authentication required" });
+  }
+  next();
+}
+
+// Get the authenticated user ID, falling back to DEMO_USER_ID if no DB
+function getUserId(req: Request): number {
+  return (req as any).user?.id ?? 1;
+}
 
 export async function registerRoutes(httpServer: Server, app: Express) {
   // Start price engine
@@ -13,9 +39,90 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // Start live signal fetcher
   startSignalFetcher();
 
-  // Signal source status
-  app.get("/api/signals/source", (_req, res) => {
-    const storageStatus = storage.getSignalSource();
+  // ============================================================
+  // AUTH ROUTES
+  // ============================================================
+
+  // Register a new user
+  app.post("/api/auth/register", async (req: Request, res: Response) => {
+    try {
+      const { username, email, password } = req.body;
+      if (!username || !email || !password) {
+        return res.status(400).json({ message: "username, email, and password are required" });
+      }
+
+      // Check if username taken
+      const existing = await storage.getUserByUsername(username);
+      if (existing) {
+        return res.status(409).json({ message: "Username already taken" });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 12);
+      const user = await storage.createUser({
+        username,
+        email,
+        password: hashedPassword,
+        avatarUrl: null,
+        level: 1,
+        xp: 0,
+        credits: 1000,
+        streak: 0,
+        longestStreak: 0,
+        lastTradeDate: null,
+        selectedAgentType: "bull",
+        createdAt: new Date().toISOString(),
+      });
+
+      // Auto-login after registration
+      req.logIn(user, (err) => {
+        if (err) return res.status(500).json({ message: "Login failed after registration" });
+        const { password: _pw, ...safeUser } = user as any;
+        return res.status(201).json({ user: safeUser });
+      });
+    } catch (err: any) {
+      console.error("Register error:", err);
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  // Login
+  app.post("/api/auth/login", (req: Request, res: Response, next: NextFunction) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) return res.status(401).json({ message: info?.message || "Invalid credentials" });
+      req.logIn(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
+        const { password: _pw, ...safeUser } = user;
+        return res.json({ user: safeUser });
+      });
+    })(req, res, next);
+  });
+
+  // Logout
+  app.post("/api/auth/logout", (req: Request, res: Response, next: NextFunction) => {
+    req.logout((err) => {
+      if (err) return next(err);
+      req.session.destroy(() => {
+        res.json({ message: "Logged out" });
+      });
+    });
+  });
+
+  // Get current authenticated user
+  app.get("/api/auth/me", (req: Request, res: Response) => {
+    if (!req.isAuthenticated || !req.isAuthenticated()) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    const { password: _pw, ...safeUser } = (req as any).user;
+    res.json({ user: safeUser });
+  });
+
+  // ============================================================
+  // SIGNAL SOURCE STATUS
+  // ============================================================
+
+  app.get("/api/signals/source", async (_req: Request, res: Response) => {
+    const storageStatus = await storage.getSignalSource();
     const fetcherStatus = getSignalFetchStatus();
     res.json({
       source: storageStatus.source,
@@ -27,103 +134,120 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     });
   });
 
-  // Get current user (demo user)
-  app.get("/api/me", (_req, res) => {
-    const user = storage.getUser(DEMO_USER_ID);
+  // ============================================================
+  // USER PROFILE
+  // ============================================================
+
+  // Get current user (uses session user or fallback to demo)
+  app.get("/api/me", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
-    const portfolio = storage.getPortfolio(DEMO_USER_ID);
-    const leaderboardEntry = storage.getLeaderboardEntry(DEMO_USER_ID);
-    const memeAgent = storage.getAgent(user.selectedAgentType);
-    const hfAgent = !memeAgent ? storage.getHedgeFundAgent(user.selectedAgentType) : null;
+    const portfolio = await storage.getPortfolio(userId);
+    const leaderboardEntry = await storage.getLeaderboardEntry(userId);
+    const memeAgent = await storage.getAgent(user.selectedAgentType);
+    const hfAgent = !memeAgent ? await storage.getHedgeFundAgent(user.selectedAgentType) : null;
     const agent = memeAgent || hfAgent;
     const agentTier = memeAgent ? "meme" : hfAgent ? "hedge_fund" : "meme";
-    const achievements = storage.getUserAchievements(DEMO_USER_ID);
-    res.json({ user, portfolio, leaderboardEntry, agent, agentTier, achievements });
+    const userAchievements = await storage.getUserAchievements(userId);
+    const { password: _pw, ...safeUser } = user as any;
+    res.json({ user: safeUser, portfolio, leaderboardEntry, agent, agentTier, achievements: userAchievements });
   });
 
-  // Update user (e.g., switch agent)
-  app.patch("/api/me", (req, res) => {
-    const updated = storage.updateUser(DEMO_USER_ID, req.body);
-    res.json(updated);
+  // Update user (e.g., switch agent) — requires auth
+  app.patch("/api/me", requireAuth, async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const updated = await storage.updateUser(userId, req.body);
+    if (!updated) return res.status(404).json({ message: "User not found" });
+    const { password: _pw, ...safeUser } = updated as any;
+    res.json(safeUser);
   });
 
-  // Get prices
-  app.get("/api/prices", (_req, res) => {
+  // ============================================================
+  // PRICES
+  // ============================================================
+
+  app.get("/api/prices", (_req: Request, res: Response) => {
     const { prices, isLive } = getCurrentPrices();
     res.json({ prices, isLive });
   });
 
-  // Get all agents
-  app.get("/api/agents", (_req, res) => {
-    const agents = storage.getAllAgents();
-    res.json(agents);
+  // ============================================================
+  // AGENTS
+  // ============================================================
+
+  app.get("/api/agents", async (_req: Request, res: Response) => {
+    const agentsList = await storage.getAllAgents();
+    res.json(agentsList);
   });
 
-  // Get agent message (contextual)
-  app.get("/api/agent/message", (req, res) => {
-    const user = storage.getUser(DEMO_USER_ID);
+  app.get("/api/agent/message", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
-    
+
     const mood = req.query.mood as string || undefined;
-    const message = storage.getRandomAgentMessage(user.selectedAgentType, mood);
+    const message = await storage.getRandomAgentMessage(user.selectedAgentType, mood);
     res.json(message || { message: "No vibes rn... check back later 👀", mood: "neutral", agentType: user.selectedAgentType });
   });
 
-  // Get agent messages for chat
-  app.get("/api/agent/messages", (req, res) => {
-    const user = storage.getUser(DEMO_USER_ID);
+  app.get("/api/agent/messages", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
-    
-    const messages = storage.getAgentMessages(user.selectedAgentType);
-    // Return a random selection of 10 messages
+
+    const messages = await storage.getAgentMessages(user.selectedAgentType);
     const shuffled = [...messages].sort(() => Math.random() - 0.5).slice(0, 10);
     res.json(shuffled);
   });
 
-  // Get portfolio
-  app.get("/api/portfolio", (_req, res) => {
-    const portfolio = storage.getPortfolio(DEMO_USER_ID);
+  // ============================================================
+  // PORTFOLIO
+  // ============================================================
+
+  app.get("/api/portfolio", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const portfolio = await storage.getPortfolio(userId);
     if (!portfolio) return res.status(404).json({ message: "Portfolio not found" });
-    
-    const positions = storage.getPositions(portfolio.id);
-    const snapshots = storage.getSnapshots(portfolio.id);
-    
-    // Update positions with current prices
-    const updatedPositions = positions.map(pos => {
+
+    const positionsList = await storage.getPositions(portfolio.id);
+    const snapshotsList = await storage.getSnapshots(portfolio.id);
+
+    const updatedPositions = positionsList.map(pos => {
       const currentPrice = getPriceForPair(pos.pair) || pos.currentPrice;
       const unrealizedPnl = (currentPrice - pos.avgEntryPrice) * pos.quantity * (pos.side === "long" ? 1 : -1);
       return { ...pos, currentPrice, unrealizedPnl: Math.round(unrealizedPnl * 100) / 100 };
     });
-    
-    res.json({ portfolio, positions: updatedPositions, snapshots });
+
+    res.json({ portfolio, positions: updatedPositions, snapshots: snapshotsList });
   });
 
-  // Get trades
-  app.get("/api/trades", (_req, res) => {
-    const portfolio = storage.getPortfolio(DEMO_USER_ID);
+  app.get("/api/trades", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const portfolio = await storage.getPortfolio(userId);
     if (!portfolio) return res.status(404).json({ message: "Portfolio not found" });
-    const trades = storage.getTrades(portfolio.id);
-    res.json(trades);
+    const tradesList = await storage.getTrades(portfolio.id);
+    res.json(tradesList);
   });
 
-  // Execute trade
-  app.post("/api/trade", (req, res) => {
+  // Execute trade — requires auth
+  app.post("/api/trade", requireAuth, async (req: Request, res: Response) => {
+    const userId = getUserId(req);
     const { pair, side, quantity } = req.body;
     const price = getPriceForPair(pair);
     if (!price) return res.status(400).json({ message: "Invalid pair" });
-    
-    const portfolio = storage.getPortfolio(DEMO_USER_ID);
+
+    const portfolio = await storage.getPortfolio(userId);
     if (!portfolio) return res.status(404).json({ message: "Portfolio not found" });
-    
+
     const totalValue = price * quantity;
     const fee = totalValue * 0.001; // 0.1% fee
-    
+
     if (side === "buy" && portfolio.cashBalance < totalValue + fee) {
       return res.status(400).json({ message: "Insufficient balance" });
     }
-    
-    // Execute trade
-    const trade = storage.addTrade({
+
+    const trade = await storage.addTrade({
       portfolioId: portfolio.id,
       pair,
       side,
@@ -133,17 +257,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       fee,
       executedAt: new Date().toISOString(),
     });
-    
-    // Update portfolio balance
+
     if (side === "buy") {
-      storage.updatePortfolio(portfolio.id, {
+      await storage.updatePortfolio(portfolio.id, {
         cashBalance: Math.round((portfolio.cashBalance - totalValue - fee) * 100) / 100,
       });
-      // Add or update position
-      const existingPositions = storage.getPositions(portfolio.id);
+      const existingPositions = await storage.getPositions(portfolio.id);
       const existing = existingPositions.find(p => p.pair === pair && p.side === "long");
       if (!existing) {
-        storage.addPosition({
+        await storage.addPosition({
           portfolioId: portfolio.id,
           pair,
           side: "long",
@@ -154,93 +276,99 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         });
       }
     } else {
-      storage.updatePortfolio(portfolio.id, {
+      await storage.updatePortfolio(portfolio.id, {
         cashBalance: Math.round((portfolio.cashBalance + totalValue - fee) * 100) / 100,
       });
     }
-    
-    // Update user XP
-    const user = storage.getUser(DEMO_USER_ID);
+
+    const user = await storage.getUser(userId);
     if (user) {
-      storage.updateUser(DEMO_USER_ID, { xp: user.xp + 10 });
+      await storage.updateUser(userId, { xp: user.xp + 10 });
     }
-    
-    res.json({ trade, message: `${side === "buy" ? "Bought" : "Sold"} ${quantity} ${pair.split("/")[0]} at $${price.toLocaleString()}` });
+
+    res.json({
+      trade,
+      message: `${side === "buy" ? "Bought" : "Sold"} ${quantity} ${pair.split("/")[0]} at $${price.toLocaleString()}`,
+    });
   });
 
-  // Get leaderboard
-  app.get("/api/leaderboard", (_req, res) => {
-    const competition = storage.getActiveCompetition();
+  // ============================================================
+  // LEADERBOARD
+  // ============================================================
+
+  app.get("/api/leaderboard", async (_req: Request, res: Response) => {
+    const competition = await storage.getActiveCompetition();
     if (!competition) return res.status(404).json({ message: "No active competition" });
-    
-    const entries = storage.getLeaderboard(competition.id);
+
+    const entries = await storage.getLeaderboard(competition.id);
     res.json({ competition, entries });
   });
 
-  // Get competition
-  app.get("/api/competition", (_req, res) => {
-    const competition = storage.getActiveCompetition();
+  app.get("/api/competition", async (_req: Request, res: Response) => {
+    const competition = await storage.getActiveCompetition();
     res.json(competition);
   });
 
-  // Get user achievements
-  app.get("/api/achievements", (_req, res) => {
-    const achievements = storage.getUserAchievements(DEMO_USER_ID);
-    res.json(achievements);
+  // ============================================================
+  // ACHIEVEMENTS
+  // ============================================================
+
+  app.get("/api/achievements", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const userAchievements = await storage.getUserAchievements(userId);
+    res.json(userAchievements);
   });
 
-  // Get daily snapshots for portfolio sparkline
-  app.get("/api/snapshots", (_req, res) => {
-    const portfolio = storage.getPortfolio(DEMO_USER_ID);
+  app.get("/api/snapshots", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const portfolio = await storage.getPortfolio(userId);
     if (!portfolio) return res.status(404).json({ message: "Portfolio not found" });
-    const snapshots = storage.getSnapshots(portfolio.id);
-    res.json(snapshots);
+    const snapshotsList = await storage.getSnapshots(portfolio.id);
+    res.json(snapshotsList);
   });
 
-  // === STAKING ===
+  // ============================================================
+  // STAKING
+  // ============================================================
 
-  // Get demo user's stakes with target user info
-  app.get("/api/staking/my-stakes", (_req, res) => {
-    const stakes = storage.getStakesByStaker(DEMO_USER_ID);
-    const enriched = stakes.map(s => {
-      const targetUser = storage.getUser(s.targetUserId);
-      // Dual-lookup: meme agent then HF agent
-      const memeAgent = targetUser ? storage.getAgent(targetUser.selectedAgentType) : undefined;
-      const hfAgent = targetUser && !memeAgent ? storage.getHedgeFundAgent(targetUser.selectedAgentType) : undefined;
+  app.get("/api/staking/my-stakes", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const stakesList = await storage.getStakesByStaker(userId);
+    const enriched = await Promise.all(stakesList.map(async s => {
+      const targetUser = await storage.getUser(s.targetUserId);
+      const memeAgent = targetUser ? await storage.getAgent(targetUser.selectedAgentType) : undefined;
+      const hfAgent = targetUser && !memeAgent ? await storage.getHedgeFundAgent(targetUser.selectedAgentType) : undefined;
       const agent = memeAgent || hfAgent;
-      const leaderboardEntry = storage.getLeaderboardEntry(s.targetUserId);
+      const leaderboardEntry = await storage.getLeaderboardEntry(s.targetUserId);
       return { ...s, targetUser, agent, leaderboardEntry };
-    });
+    }));
     res.json(enriched);
   });
 
-  // Staking leaderboard — top agents by total credits staked
-  app.get("/api/staking/leaderboard", (_req, res) => {
-    const leaderboard = storage.getStakingLeaderboard();
-    const enriched = leaderboard.map(entry => {
-      const user = storage.getUser(entry.targetUserId);
-      // Dual-lookup: meme agent then HF agent
-      const memeAgent = user ? storage.getAgent(user.selectedAgentType) : undefined;
-      const hfAgent = user && !memeAgent ? storage.getHedgeFundAgent(user.selectedAgentType) : undefined;
+  app.get("/api/staking/leaderboard", async (_req: Request, res: Response) => {
+    const leaderboard = await storage.getStakingLeaderboard();
+    const enriched = await Promise.all(leaderboard.map(async entry => {
+      const user = await storage.getUser(entry.targetUserId);
+      const memeAgent = user ? await storage.getAgent(user.selectedAgentType) : undefined;
+      const hfAgent = user && !memeAgent ? await storage.getHedgeFundAgent(user.selectedAgentType) : undefined;
       const agent = memeAgent || hfAgent;
-      const lb = storage.getLeaderboardEntry(entry.targetUserId);
+      const lb = await storage.getLeaderboardEntry(entry.targetUserId);
       return { ...entry, user, agent, leaderboardEntry: lb };
-    });
+    }));
     res.json(enriched);
   });
 
-  // Get staking info for a specific agent/user
-  app.get("/api/staking/agent/:userId", (req, res) => {
-    const userId = parseInt(req.params.userId);
-    const totalStaked = storage.getTotalStakedOnUser(userId);
-    const stakesOnTarget = storage.getStakesByTarget(userId);
-    const myStake = storage.getStake(DEMO_USER_ID, userId);
-    const user = storage.getUser(userId);
-    // Dual-lookup: meme agent then HF agent
-    const memeAgent = user ? storage.getAgent(user.selectedAgentType) : undefined;
-    const hfAgent = user && !memeAgent ? storage.getHedgeFundAgent(user.selectedAgentType) : undefined;
+  app.get("/api/staking/agent/:userId", async (req: Request, res: Response) => {
+    const targetUserId = parseInt(String(req.params.userId));
+    const currentUserId = getUserId(req);
+    const totalStaked = await storage.getTotalStakedOnUser(targetUserId);
+    const stakesOnTarget = await storage.getStakesByTarget(targetUserId);
+    const myStake = await storage.getStake(currentUserId, targetUserId);
+    const user = await storage.getUser(targetUserId);
+    const memeAgent = user ? await storage.getAgent(user.selectedAgentType) : undefined;
+    const hfAgent = user && !memeAgent ? await storage.getHedgeFundAgent(user.selectedAgentType) : undefined;
     const agent = memeAgent || hfAgent;
-    const leaderboardEntry = storage.getLeaderboardEntry(userId);
+    const leaderboardEntry = await storage.getLeaderboardEntry(targetUserId);
     res.json({
       totalStaked,
       stakerCount: new Set(stakesOnTarget.map(s => s.stakerId)).size,
@@ -251,85 +379,80 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     });
   });
 
-  // Demo user's reward history
-  app.get("/api/staking/rewards", (_req, res) => {
-    const rewards = storage.getRewardsByStaker(DEMO_USER_ID);
-    const enriched = rewards.map(r => {
-      const targetUser = storage.getUser(r.targetUserId);
+  app.get("/api/staking/rewards", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const rewards = await storage.getRewardsByStaker(userId);
+    const enriched = await Promise.all(rewards.map(async r => {
+      const targetUser = await storage.getUser(r.targetUserId);
       return { ...r, targetUser };
-    });
+    }));
     res.json(enriched);
   });
 
-  // Stake credits on an agent
-  app.post("/api/staking/stake", (req, res) => {
+  // Stake credits on an agent — requires auth
+  app.post("/api/staking/stake", requireAuth, async (req: Request, res: Response) => {
+    const userId = getUserId(req);
     const { targetUserId, amount } = req.body;
     if (!targetUserId || !amount || amount <= 0) {
       return res.status(400).json({ message: "Invalid targetUserId or amount" });
     }
 
-    const user = storage.getUser(DEMO_USER_ID);
+    const user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
     if (user.credits < amount) {
       return res.status(400).json({ message: "Insufficient credits" });
     }
 
-    const target = storage.getUser(targetUserId);
+    const target = await storage.getUser(targetUserId);
     if (!target) return res.status(404).json({ message: "Target user not found" });
 
-    // Check if already staked — if so, add to existing
-    const existing = storage.getStake(DEMO_USER_ID, targetUserId);
+    const existing = await storage.getStake(userId, targetUserId);
     if (existing) {
-      storage.updateStake(DEMO_USER_ID, targetUserId, existing.amount + amount);
+      await storage.updateStake(userId, targetUserId, existing.amount + amount);
     } else {
-      storage.addStake({
-        stakerId: DEMO_USER_ID,
+      await storage.addStake({
+        stakerId: userId,
         targetUserId,
         amount,
         stakedAt: new Date().toISOString(),
       });
     }
 
-    // Deduct credits
-    storage.updateUser(DEMO_USER_ID, { credits: user.credits - amount });
-
-    // XP bonus
-    storage.updateUser(DEMO_USER_ID, { xp: (user.xp || 0) + 25 });
+    await storage.updateUser(userId, { credits: user.credits - amount });
+    await storage.updateUser(userId, { xp: (user.xp || 0) + 25 });
 
     res.json({ message: "Staked successfully", xpBonus: 25 });
   });
 
-  // Unstake credits from an agent
-  app.post("/api/staking/unstake", (req, res) => {
+  // Unstake credits — requires auth
+  app.post("/api/staking/unstake", requireAuth, async (req: Request, res: Response) => {
+    const userId = getUserId(req);
     const { targetUserId } = req.body;
     if (!targetUserId) {
       return res.status(400).json({ message: "Missing targetUserId" });
     }
 
-    const stake = storage.getStake(DEMO_USER_ID, targetUserId);
+    const stake = await storage.getStake(userId, targetUserId);
     if (!stake) return res.status(404).json({ message: "No stake found" });
 
-    const user = storage.getUser(DEMO_USER_ID);
+    const user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Return credits
-    storage.updateUser(DEMO_USER_ID, { credits: user.credits + stake.amount });
-
-    // Remove stake
-    storage.removeStake(DEMO_USER_ID, targetUserId);
+    await storage.updateUser(userId, { credits: user.credits + stake.amount });
+    await storage.removeStake(userId, targetUserId);
 
     res.json({ message: "Unstaked successfully", creditsReturned: stake.amount });
   });
 
-  // Overall staking stats
-  app.get("/api/staking/stats", (_req, res) => {
-    const leaderboard = storage.getStakingLeaderboard();
+  // Staking stats
+  app.get("/api/staking/stats", async (_req: Request, res: Response) => {
+    const leaderboard = await storage.getStakingLeaderboard();
     const totalStaked = leaderboard.reduce((sum, e) => sum + e.totalStaked, 0);
     const allStakerIds = new Set<number>();
     for (const e of leaderboard) {
-      const stakes = storage.getStakesByTarget(e.targetUserId);
-      stakes.forEach(s => allStakerIds.add(s.stakerId));
+      const stakesList = await storage.getStakesByTarget(e.targetUserId);
+      stakesList.forEach(s => allStakerIds.add(s.stakerId));
     }
     res.json({
       totalStaked,
@@ -339,126 +462,133 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     });
   });
 
-  // Get another user's profile (from leaderboard)
-  app.get("/api/user/:id", (req, res) => {
-    const userId = parseInt(req.params.id);
-    const user = storage.getUser(userId);
+  // ============================================================
+  // USER PROFILES
+  // ============================================================
+
+  app.get("/api/user/:id", async (req: Request, res: Response) => {
+    const targetUserId = parseInt(String(req.params.id));
+    const user = await storage.getUser(targetUserId);
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    const leaderboardEntry = storage.getLeaderboardEntry(userId);
-    // Dual-lookup: meme agent then HF agent
-    const memeAgent = storage.getAgent(user.selectedAgentType);
-    const hfAgent = !memeAgent ? storage.getHedgeFundAgent(user.selectedAgentType) : null;
+    const leaderboardEntry = await storage.getLeaderboardEntry(targetUserId);
+    const memeAgent = await storage.getAgent(user.selectedAgentType);
+    const hfAgent = !memeAgent ? await storage.getHedgeFundAgent(user.selectedAgentType) : null;
     const agent = memeAgent || hfAgent;
     const agentTier = memeAgent ? "meme" : hfAgent ? "hedge_fund" : "meme";
-    const achievements = storage.getUserAchievements(userId);
+    const userAchievements = await storage.getUserAchievements(targetUserId);
+    const { password: _pw, ...safeUser } = user as any;
 
-    res.json({ user, leaderboardEntry, agent, agentTier, achievements });
+    res.json({ user: safeUser, leaderboardEntry, agent, agentTier, achievements: userAchievements });
   });
 
-  // === HEDGE FUND AGENTS ===
+  // ============================================================
+  // HEDGE FUND AGENTS
+  // ============================================================
 
-  // List all 19 hedge fund agents
-  app.get("/api/hf-agents", (_req, res) => {
-    const agents = storage.getAllHedgeFundAgents();
-    res.json(agents);
+  app.get("/api/hf-agents", async (_req: Request, res: Response) => {
+    const agentsList = await storage.getAllHedgeFundAgents();
+    res.json(agentsList);
   });
 
-  // Single agent detail with latest signals
-  app.get("/api/hf-agents/:agentId", (req, res) => {
-    const agent = storage.getHedgeFundAgent(req.params.agentId);
+  app.get("/api/hf-agents/:agentId", async (req: Request, res: Response) => {
+    const agent = await storage.getHedgeFundAgent(String(req.params.agentId));
     if (!agent) return res.status(404).json({ message: "Hedge fund agent not found" });
-    const latestSignals = storage.getSignalsByAgent(agent.agentId, 20);
-    const stats = storage.getAgentSignalStats(agent.agentId);
+    const latestSignals = await storage.getSignalsByAgent(agent.agentId, 20);
+    const stats = await storage.getAgentSignalStats(agent.agentId);
     res.json({ agent, latestSignals, stats });
   });
 
-  // All signals for an agent
-  app.get("/api/hf-agents/:agentId/signals", (req, res) => {
+  app.get("/api/hf-agents/:agentId/signals", async (req: Request, res: Response) => {
     const ticker = req.query.ticker as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-    let signals = storage.getSignalsByAgent(req.params.agentId, limit);
+    let signals = await storage.getSignalsByAgent(String(req.params.agentId), limit);
     if (ticker) signals = signals.filter(s => s.ticker === ticker);
     res.json(signals);
   });
 
-  // === SIGNALS ===
+  // ============================================================
+  // SIGNALS
+  // ============================================================
 
-  // Global live signals feed
-  app.get("/api/signals", (req, res) => {
+  app.get("/api/signals", async (req: Request, res: Response) => {
     const ticker = req.query.ticker as string | undefined;
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-    let signals = storage.getLatestSignals(limit * 2); // get extra then filter
+    let signals = await storage.getLatestSignals(limit * 2);
     if (ticker) signals = signals.filter(s => s.ticker === ticker);
     res.json(signals.slice(0, limit));
   });
 
-  // All agent signals for a specific ticker
-  app.get("/api/signals/ticker/:ticker", (req, res) => {
+  app.get("/api/signals/ticker/:ticker", async (req: Request, res: Response) => {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
-    const signals = storage.getSignalsByTicker(req.params.ticker, limit);
+    const signals = await storage.getSignalsByTicker(String(req.params.ticker), limit);
     res.json(signals);
   });
 
-  // Latest signal from each agent (live board)
-  app.get("/api/signals/latest", (_req, res) => {
-    const agents = storage.getAllHedgeFundAgents();
-    const latestSignals = agents.map(agent => {
-      const signal = storage.getLatestSignalByAgent(agent.agentId);
-      return signal ? { agent, signal } : null;
-    }).filter(Boolean);
+  app.get("/api/signals/latest", async (_req: Request, res: Response) => {
+    const agentsList = await storage.getAllHedgeFundAgents();
+    const latestSignals = (
+      await Promise.all(
+        agentsList.map(async agent => {
+          const signal = await storage.getLatestSignalByAgent(agent.agentId);
+          return signal ? { agent, signal } : null;
+        })
+      )
+    ).filter(Boolean);
     res.json(latestSignals);
   });
 
-  // === MEME AGENT → HEDGE FUND MAPPING ===
+  // ============================================================
+  // MEME AGENT → HEDGE FUND MAPPING
+  // ============================================================
 
-  // Get hedge fund agents powering a meme agent
-  app.get("/api/agents/:type/hedge-fund", (req, res) => {
-    const mappings = storage.getMemeAgentMapping(req.params.type);
-    const enriched = mappings.map(m => {
-      const hfAgent = storage.getHedgeFundAgent(m.hedgeFundAgentId);
-      const latestSignal = storage.getLatestSignalByAgent(m.hedgeFundAgentId);
+  app.get("/api/agents/:type/hedge-fund", async (req: Request, res: Response) => {
+    const mappings = await storage.getMemeAgentMapping(String(req.params.type));
+    const enriched = await Promise.all(mappings.map(async m => {
+      const hfAgent = await storage.getHedgeFundAgent(m.hedgeFundAgentId);
+      const latestSignal = await storage.getLatestSignalByAgent(m.hedgeFundAgentId);
       return { ...m, hfAgent, latestSignal };
-    });
+    }));
     res.json(enriched);
   });
 
-  // Composite signal for meme agent
-  app.get("/api/agents/:type/composite-signal", (req, res) => {
+  app.get("/api/agents/:type/composite-signal", async (req: Request, res: Response) => {
     const ticker = (req.query.ticker as string) || "BTC";
-    const composite = storage.getCompositeSignal(req.params.type, ticker);
+    const composite = await storage.getCompositeSignal(String(req.params.type), ticker);
     if (!composite) return res.json({ signal: "neutral", confidence: 50, contributors: [] });
     res.json(composite);
   });
 
-  // === HF AGENT STAKING ===
+  // ============================================================
+  // HF AGENT STAKING
+  // ============================================================
 
-  // Stake on a hedge fund agent
-  app.post("/api/staking/stake-agent", (req, res) => {
+  app.post("/api/staking/stake-agent", requireAuth, async (req: Request, res: Response) => {
+    const userId = getUserId(req);
     const { hedgeFundAgentId, amount } = req.body;
     if (!hedgeFundAgentId || !amount || amount <= 0) {
       return res.status(400).json({ message: "Invalid hedgeFundAgentId or amount" });
     }
-    const user = storage.getUser(DEMO_USER_ID);
+    const user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
     if (user.credits < amount) return res.status(400).json({ message: "Insufficient credits" });
 
-    const agent = storage.getHedgeFundAgent(hedgeFundAgentId);
+    const agent = await storage.getHedgeFundAgent(hedgeFundAgentId);
     if (!agent) return res.status(404).json({ message: "Hedge fund agent not found" });
 
-    storage.addHfAgentStake(DEMO_USER_ID, hedgeFundAgentId, amount);
-    storage.updateUser(DEMO_USER_ID, { credits: user.credits - amount });
+    await storage.addHfAgentStake(userId, hedgeFundAgentId, amount);
+    await storage.updateUser(userId, { credits: user.credits - amount });
 
     res.json({ message: "Staked on agent successfully", agent: agent.name });
   });
 
-  // Get user's HF agent stakes
-  app.get("/api/staking/agent-stakes", (_req, res) => {
-    const stakes = storage.getHfAgentStakes(DEMO_USER_ID);
-    const enriched = stakes.map(s => {
-      const agent = storage.getHedgeFundAgent(s.hedgeFundAgentId);
+  app.get("/api/staking/agent-stakes", async (req: Request, res: Response) => {
+    const userId = getUserId(req);
+    const stakesList = await storage.getHfAgentStakes(userId);
+    const enriched = await Promise.all(stakesList.map(async s => {
+      const agent = await storage.getHedgeFundAgent(s.hedgeFundAgentId);
       return { ...s, agent };
-    });
+    }));
     res.json(enriched);
   });
 }

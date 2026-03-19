@@ -7,6 +7,7 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull(),
   email: text("email").notNull(),
+  password: text("password"), // nullable — agent users won't have passwords
   avatarUrl: text("avatar_url"),
   level: integer("level").notNull().default(1),
   xp: integer("xp").notNull().default(0),
@@ -232,3 +233,16 @@ export const memeAgentMapping = pgTable("meme_agent_mapping", {
 export const insertMemeAgentMappingSchema = createInsertSchema(memeAgentMapping).omit({ id: true });
 export type InsertMemeAgentMapping = z.infer<typeof insertMemeAgentMappingSchema>;
 export type MemeAgentMapping = typeof memeAgentMapping.$inferSelect;
+
+// HF Agent Stakes — users staking credits on hedge fund agents
+export const hfAgentStakes = pgTable("hf_agent_stakes", {
+  id: serial("id").primaryKey(),
+  stakerId: integer("staker_id").notNull(),
+  hedgeFundAgentId: text("hedge_fund_agent_id").notNull(),
+  amount: integer("amount").notNull(),
+  stakedAt: text("staked_at").notNull(),
+});
+
+export const insertHfAgentStakeSchema = createInsertSchema(hfAgentStakes).omit({ id: true });
+export type InsertHfAgentStake = z.infer<typeof insertHfAgentStakeSchema>;
+export type HfAgentStake = typeof hfAgentStakes.$inferSelect;

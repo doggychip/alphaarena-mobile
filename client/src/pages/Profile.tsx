@@ -1,4 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 
 const ACHIEVEMENT_DEFS: Record<string, { emoji: string; name: string; desc: string; xp: number }> = {
   first_blood: { emoji: "🎖️", name: "First Blood", desc: "Made your first trade", xp: 100 },
@@ -25,11 +28,14 @@ function getLevelInfo(xp: number) {
 }
 
 export default function Profile() {
+  const { user: authUser, logout } = useAuth();
+  const [, navigate] = useLocation();
+
   const { data: meData } = useQuery<any>({ queryKey: ["/api/me"] });
-  const { data: portfolioData } = useQuery<any>({ queryKey: ["/api/portfolio"] });
   const { data: stakingRewards } = useQuery<any>({ queryKey: ["/api/staking/rewards"] });
 
-  const user = meData?.user;
+  // Use authenticated user data if available, fall back to meData
+  const user = authUser ?? meData?.user;
   const portfolio = meData?.portfolio;
   const leaderboard = meData?.leaderboardEntry;
   const achievements = meData?.achievements || [];
@@ -37,14 +43,12 @@ export default function Profile() {
 
   const xp = user?.xp || 0;
   const levelInfo = getLevelInfo(xp);
-  const xpInLevel = xp;
   const xpProgress = ((xp % 500) / 500) * 100;
 
   const totalReturn = leaderboard?.totalReturn || 0;
   const portfolioValue = portfolio?.totalEquity || 100000;
   const totalStakingRewards = (stakingRewards || []).reduce((sum: number, r: any) => sum + r.amount, 0);
 
-  // Stats
   const stats = [
     { emoji: "📊", label: "Total Return", value: `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(1)}%`, color: totalReturn >= 0 ? "#00FF88" : "#FF3B9A" },
     { emoji: "🏆", label: "Best Rank", value: `#${leaderboard?.rank || "-"}`, color: "#FFD700" },
@@ -54,6 +58,17 @@ export default function Profile() {
     { emoji: "🎯", label: "Win Rate", value: `${leaderboard?.winRate?.toFixed(0) || 62}%`, color: "#FFD700" },
   ];
 
+  const handleLogout = async () => {
+    try {
+      await logout();
+      // Clear guest flag too on explicit logout
+      localStorage.removeItem("alphaarena_guest");
+      navigate("/auth");
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
@@ -61,10 +76,31 @@ export default function Profile() {
         <h1 className="font-display font-bold text-lg text-[#E8E8E8]">👤 Profile</h1>
       </header>
 
+      {/* Login prompt for unauthenticated users */}
+      {!authUser && (
+        <div className="mx-4 mt-2 rounded-2xl bg-[#1A1A2E] border border-neon-green/20 p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm font-display font-bold text-[#E8E8E8]">Not logged in</p>
+            <p className="text-xs text-[#888899] mt-0.5">Login to track your progress</p>
+          </div>
+          <Button
+            onClick={() => navigate("/auth")}
+            className="font-display font-bold text-xs tracking-wider h-9 px-4 rounded-xl"
+            style={{
+              background: "linear-gradient(135deg, #00FF88 0%, #00D4FF 100%)",
+              color: "#0A0A0F",
+              boxShadow: "0 0 16px rgba(0,255,136,0.3)",
+            }}
+          >
+            Login
+          </Button>
+        </div>
+      )}
+
       {/* Profile Header */}
       <div className="mx-4 mt-2 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-5 text-center">
         <div className="w-20 h-20 rounded-full bg-neon-green/20 border-3 border-neon-green mx-auto flex items-center justify-center text-3xl font-bold text-neon-green" style={{ borderWidth: 3 }}>
-          {user?.username?.[0] || "D"}
+          {user?.username?.[0]?.toUpperCase() || "D"}
         </div>
         <h2 className="font-display font-bold text-xl text-[#E8E8E8] mt-3">{user?.username || "DegenRyan"}</h2>
         <p className="text-xs text-[#888899] mt-1">Joined {user?.createdAt ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "Feb 2026"}</p>
@@ -147,7 +183,7 @@ export default function Profile() {
       </div>
 
       {/* Settings */}
-      <div className="mx-4 mt-4 mb-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
+      <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
         <p className="text-xs text-[#888899] font-display mb-3">⚙️ Settings</p>
         <div className="space-y-3">
           <div className="flex items-center justify-between py-2">
@@ -160,11 +196,34 @@ export default function Profile() {
               <div className="w-4 h-4 rounded-full bg-neon-green absolute right-1 top-0.5" />
             </div>
           </div>
+
+          {/* Logout / Login action */}
+          {authUser ? (
+            <div className="flex items-center justify-between py-2 border-t border-[#2A2A3E]">
+              <span className="text-sm text-[#E8E8E8]">🚪 Account</span>
+              <button
+                onClick={handleLogout}
+                className="text-xs text-[#FF3B9A] bg-[#FF3B9A]/10 border border-[#FF3B9A]/20 hover:bg-[#FF3B9A]/20 px-3 py-1 rounded-full transition-colors font-display font-semibold"
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between py-2 border-t border-[#2A2A3E]">
+              <span className="text-sm text-[#E8E8E8]">🔑 Account</span>
+              <button
+                onClick={() => navigate("/auth")}
+                className="text-xs text-neon-green bg-neon-green/10 border border-neon-green/20 hover:bg-neon-green/20 px-3 py-1 rounded-full transition-colors font-display font-semibold"
+              >
+                Login
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Footer attribution */}
-      <div className="px-4 pb-4 text-center">
+      <div className="px-4 pb-4 mt-4 text-center">
         <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#555566]">
           Created with Perplexity Computer
         </a>

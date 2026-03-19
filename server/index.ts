@@ -1,7 +1,11 @@
 import express, { type Request, Response, NextFunction } from "express";
+import session from "express-session";
+import passport from "passport";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { pool } from "./db";
+import "./auth"; // Import to register passport strategies
 
 const app = express();
 const httpServer = createServer(app);
@@ -60,6 +64,34 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Session store — use Postgres if available, else memory
+  let sessionStore: any;
+  if (pool) {
+    const PgSessionModule = await import("connect-pg-simple");
+    const PgSession = PgSessionModule.default(session);
+    sessionStore = new PgSession({ pool, createTableIfMissing: true });
+  } else {
+    const MemoryStoreModule = await import("memorystore");
+    const MemoryStore = MemoryStoreModule.default(session);
+    sessionStore = new MemoryStore({ checkPeriod: 86400000 });
+  }
+
+  app.use(
+    session({
+      store: sessionStore,
+      secret: process.env.SESSION_SECRET || "alpha-arena-dev-secret",
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: process.env.NODE_ENV === "production" && !!process.env.HTTPS,
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      },
+    })
+  );
+
+  app.use(passport.initialize());
+  app.use(passport.session());
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
