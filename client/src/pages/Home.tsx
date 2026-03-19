@@ -3,6 +3,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
 import { Link } from "wouter";
 import TradeModal from "@/components/TradeModal";
+import NotificationPanel, { useUnreadCount } from "@/components/NotificationPanel";
 
 // AlphaArena Logo SVG
 function Logo() {
@@ -55,6 +56,8 @@ function PriceTicker({ prices }: { prices: any[] }) {
 export default function Home() {
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [tradeMode, setTradeMode] = useState<"buy" | "sell">("buy");
+  const [showNotifications, setShowNotifications] = useState(false);
+  const unreadCount = useUnreadCount();
 
   const { data: meData } = useQuery<any>({
     queryKey: ["/api/me"],
@@ -131,7 +134,18 @@ export default function Home() {
           <Link href="/how-to-play">
             <button data-testid="btn-how-to-play" className="w-10 h-10 flex items-center justify-center rounded-full bg-[#1A1A2E] text-lg" aria-label="How to Play">📖</button>
           </Link>
-          <button data-testid="btn-notifications" className="w-10 h-10 flex items-center justify-center rounded-full bg-[#1A1A2E] text-lg">🔔</button>
+          <button
+            data-testid="btn-notifications"
+            onClick={() => setShowNotifications(true)}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-[#1A1A2E] text-lg relative"
+          >
+            🔔
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-neon-pink text-[9px] font-display font-bold text-white flex items-center justify-center">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
           <div className="w-9 h-9 rounded-full bg-neon-green/20 border-2 border-neon-green flex items-center justify-center text-sm font-bold text-neon-green">
             {user?.username?.[0] || "D"}
           </div>
@@ -372,6 +386,11 @@ export default function Home() {
           Created with Perplexity Computer
         </a>
       </div>
+
+      {/* Notification Panel */}
+      {showNotifications && (
+        <NotificationPanel onClose={() => setShowNotifications(false)} />
+      )}
 
       {/* Trade Modal */}
       {showTradeModal && (

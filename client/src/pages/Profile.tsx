@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 const ACHIEVEMENT_DEFS: Record<string, { emoji: string; name: string; desc: string; xp: number }> = {
   first_blood: { emoji: "🎖️", name: "First Blood", desc: "Made your first trade", xp: 100 },
@@ -30,6 +31,7 @@ function getLevelInfo(xp: number) {
 export default function Profile() {
   const { user: authUser, logout } = useAuth();
   const [, navigate] = useLocation();
+  const [selectedAchievement, setSelectedAchievement] = useState<string | null>(null);
 
   const { data: meData } = useQuery<any>({ queryKey: ["/api/me"] });
   const { data: stakingRewards } = useQuery<any>({ queryKey: ["/api/staking/rewards"] });
@@ -50,12 +52,12 @@ export default function Profile() {
   const totalStakingRewards = (stakingRewards || []).reduce((sum: number, r: any) => sum + r.amount, 0);
 
   const stats = [
-    { emoji: "📊", label: "Total Return", value: `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(1)}%`, color: totalReturn >= 0 ? "#00FF88" : "#FF3B9A" },
-    { emoji: "🏆", label: "Best Rank", value: `#${leaderboard?.rank || "-"}`, color: "#FFD700" },
-    { emoji: "🔥", label: "Longest Streak", value: `${user?.longestStreak || 0}d`, color: "#FF3B9A" },
-    { emoji: "💰", label: "Credits", value: `${(user?.credits || 0).toLocaleString()}`, color: "#FFD700" },
-    { emoji: "📈", label: "Staking Rewards", value: `+${totalStakingRewards.toLocaleString()}`, color: "#00FF88" },
-    { emoji: "🎯", label: "Win Rate", value: `${leaderboard?.winRate?.toFixed(0) || 62}%`, color: "#FFD700" },
+    { emoji: "📊", label: "Total Return", value: `${totalReturn >= 0 ? "+" : ""}${totalReturn.toFixed(1)}%`, color: totalReturn >= 0 ? "#00FF88" : "#FF3B9A", href: "/arena", hint: "View Arena" },
+    { emoji: "🏆", label: "Best Rank", value: `#${leaderboard?.rank || "-"}`, color: "#FFD700", href: "/arena", hint: "View Leaderboard" },
+    { emoji: "🔥", label: "Longest Streak", value: `${user?.longestStreak || 0}d`, color: "#FF3B9A", hint: "Trade daily to grow" },
+    { emoji: "💰", label: "Credits", value: `${(user?.credits || 0).toLocaleString()}`, color: "#FFD700", href: "/stake", hint: "Stake Credits" },
+    { emoji: "📈", label: "Staking Rewards", value: `+${totalStakingRewards.toLocaleString()}`, color: "#00FF88", href: "/stake", hint: "View Staking" },
+    { emoji: "🎯", label: "Win Rate", value: `${leaderboard?.winRate?.toFixed(0) || 62}%`, color: "#FFD700", href: "/signals", hint: "View Signals" },
   ];
 
   const handleLogout = async () => {
@@ -117,11 +119,18 @@ export default function Profile() {
       {/* Stats Grid */}
       <div className="mx-4 mt-4 grid grid-cols-3 gap-2">
         {stats.map((stat, i) => (
-          <div key={i} className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-3 text-center">
+          <button
+            key={i}
+            onClick={() => stat.href && navigate(stat.href)}
+            className={`rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-3 text-center transition-all active:scale-95 ${stat.href ? "active:border-neon-cyan/40 cursor-pointer" : ""}`}
+          >
             <span className="text-lg">{stat.emoji}</span>
             <p className="font-mono-num text-base font-bold mt-1" style={{ color: stat.color }}>{stat.value}</p>
             <p className="text-[9px] text-[#888899] font-display mt-0.5">{stat.label}</p>
-          </div>
+            {stat.hint && (
+              <p className="text-[8px] text-neon-cyan/60 font-display mt-1">{stat.href ? stat.hint + " →" : stat.hint}</p>
+            )}
+          </button>
         ))}
       </div>
 
@@ -132,13 +141,14 @@ export default function Profile() {
           {Object.entries(ACHIEVEMENT_DEFS).map(([type, def]) => {
             const unlocked = unlockedTypes.has(type);
             return (
-              <div
+              <button
                 key={type}
-                className={`flex-shrink-0 w-[120px] rounded-2xl p-2.5 border transition-all ${
+                onClick={() => setSelectedAchievement(selectedAchievement === type ? null : type)}
+                className={`flex-shrink-0 w-[120px] rounded-2xl p-2.5 border transition-all text-left active:scale-95 ${
                   unlocked
                     ? "bg-[#1A1A2E] border-neon-gold/30"
                     : "bg-[#0D0D14] border-[#1A1A2E] opacity-50"
-                }`}
+                } ${selectedAchievement === type ? "ring-1 ring-neon-cyan/50" : ""}`}
               >
                 <span className={`text-2xl ${unlocked ? "" : "grayscale blur-[2px]"}`}>
                   {unlocked ? def.emoji : "❓"}
@@ -152,10 +162,34 @@ export default function Profile() {
                 {unlocked && (
                   <span className="text-[8px] text-neon-gold font-mono-num mt-1 block">+{def.xp} XP</span>
                 )}
-              </div>
+              </button>
             );
           })}
         </div>
+
+        {/* Achievement Detail Toast */}
+        {selectedAchievement && ACHIEVEMENT_DEFS[selectedAchievement] && (
+          <div
+            className="mt-2 rounded-2xl bg-[#1A1A2E] border border-neon-gold/20 p-3 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-200"
+            onClick={() => setSelectedAchievement(null)}
+          >
+            <span className="text-3xl">
+              {unlockedTypes.has(selectedAchievement) ? ACHIEVEMENT_DEFS[selectedAchievement].emoji : "🔒"}
+            </span>
+            <div className="flex-1">
+              <p className="font-display font-bold text-sm text-[#E8E8E8]">
+                {unlockedTypes.has(selectedAchievement) ? ACHIEVEMENT_DEFS[selectedAchievement].name : "Locked"}
+              </p>
+              <p className="text-xs text-[#888899] mt-0.5">{ACHIEVEMENT_DEFS[selectedAchievement].desc}</p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-mono-num text-neon-gold">+{ACHIEVEMENT_DEFS[selectedAchievement].xp} XP</span>
+              <p className="text-[9px] text-[#888899] mt-0.5">
+                {unlockedTypes.has(selectedAchievement) ? "✅ Unlocked" : "🔒 Locked"}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* XP Progress */}
