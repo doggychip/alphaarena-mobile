@@ -452,7 +452,15 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     if (!competition) return res.status(404).json({ message: "No active competition" });
 
     const entries = await storage.getLeaderboard(competition.id);
-    res.json({ competition, entries });
+    // Flag AI agent entries vs real player entries
+    // NPC agent users (ids 2-26) have emails like {type}@alpha.gg
+    // Real users: demo user (id 1) + any registered users (id > 26)
+    const NPC_AGENT_IDS = new Set([2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26]);
+    const enriched = entries.map(e => ({
+      ...e,
+      isAgent: NPC_AGENT_IDS.has(e.userId),
+    }));
+    res.json({ competition, entries: enriched });
   });
 
   app.get("/api/competition", async (_req: Request, res: Response) => {
