@@ -11,6 +11,7 @@ export default function Stake() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [stakeTarget, setStakeTarget] = useState<any>(null);
+  const [showRewardInfo, setShowRewardInfo] = useState(false);
 
   function goToAgent(user: any) {
     if (!user) return;
@@ -27,6 +28,7 @@ export default function Stake() {
   const { data: stakingLeaderboard } = useQuery<any>({ queryKey: ["/api/staking/leaderboard"] });
   const { data: rewards } = useQuery<any>({ queryKey: ["/api/staking/rewards"] });
   const { data: stats } = useQuery<any>({ queryKey: ["/api/staking/stats"] });
+  const { data: rewardSummary } = useQuery<any>({ queryKey: ["/api/staking/reward-summary"] });
 
   const user = meData?.user;
   const stakes = myStakes || [];
@@ -34,7 +36,7 @@ export default function Stake() {
   const rewardHistory = rewards || [];
 
   const totalStaked = stakes.reduce((sum: number, s: any) => sum + s.amount, 0);
-  const totalEarned = rewardHistory.reduce((sum: number, r: any) => sum + r.amount, 0);
+  const totalEarned = rewardSummary?.totalEarned ?? rewardHistory.reduce((sum: number, r: any) => sum + r.amount, 0);
 
   const unstakeMutation = useMutation({
     mutationFn: async (targetUserId: number) => {
@@ -47,6 +49,7 @@ export default function Stake() {
       queryClient.invalidateQueries({ queryKey: ["/api/staking/leaderboard"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staking/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staking/reward-summary"] });
     },
     onError: (err: any) => {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
@@ -77,7 +80,7 @@ export default function Stake() {
           </div>
           <div className="text-center">
             <p className="text-[10px] text-[#888899] font-display">Credit APY</p>
-            <p className="font-mono-num text-xl font-bold text-neon-gold">~{stats?.avgApy || 12.4}%</p>
+            <p className="font-mono-num text-xl font-bold text-neon-gold">~{stats?.avgApy || 0}%</p>
           </div>
         </div>
         {/* Mini bar showing staked vs available */}
@@ -92,6 +95,55 @@ export default function Stake() {
           <span className="text-[9px] text-neon-cyan font-mono-num">Staked</span>
           <span className="text-[9px] text-neon-gold font-mono-num">Available</span>
         </div>
+      </div>
+
+      {/* Reward Breakdown */}
+      {rewardSummary && rewardSummary.totalEarned > 0 && (
+        <div className="mx-4 mt-3 rounded-2xl bg-[#12121A] border border-[#2A2A3E] p-3">
+          <p className="text-[10px] text-[#888899] font-display mb-2">Reward Breakdown</p>
+          <div className="flex gap-2">
+            <RewardPill emoji="📈" label="Performance" amount={rewardSummary.breakdown.performance} color="#00FF88" />
+            <RewardPill emoji="🏆" label="Promotion" amount={rewardSummary.breakdown.promotion} color="#FFD700" />
+            <RewardPill emoji="🎉" label="Season" amount={rewardSummary.breakdown.season} color="#00D4FF" />
+          </div>
+          {/* Reward engine status */}
+          {stats?.rewardEngine?.lastRewardRun && (
+            <p className="text-[9px] text-[#555566] mt-2 font-mono-num">
+              Last payout: {new Date(stats.rewardEngine.lastRewardRun).toLocaleString()} · Run #{stats.rewardEngine.rewardRunCount}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* How Rewards Work */}
+      <div className="mx-4 mt-3">
+        <button
+          onClick={() => setShowRewardInfo(!showRewardInfo)}
+          className="w-full rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] px-4 py-2.5 flex items-center justify-between active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm">ℹ️</span>
+            <span className="font-display font-bold text-xs text-[#E8E8E8]">How Rewards Work</span>
+          </div>
+          <span className={`text-[#888899] text-xs transition-transform ${showRewardInfo ? "rotate-180" : ""}`}>▼</span>
+        </button>
+        {showRewardInfo && (
+          <div className="mt-1 rounded-2xl bg-[#12121A] border border-[#2A2A3E] p-4 space-y-3">
+            <p className="text-xs text-[#888899] leading-relaxed">
+              Stake credits on agents you believe in. Earn <span className="text-neon-green font-display font-bold">real rewards</span> based on their performance:
+            </p>
+            <div className="space-y-2">
+              <RewardInfoRow emoji="📈" label="Daily Performance" color="#00FF88" desc="Earn credits proportional to your stake × agent's score. Top agents earn up to 2x base rate." />
+              <RewardInfoRow emoji="🏆" label="League Promotion" color="#FFD700" desc="One-time bonus when your staked agent moves up a league (e.g. Silver → Gold)." />
+              <RewardInfoRow emoji="🎉" label="Season End" color="#00D4FF" desc="Final payout based on agent's end-of-season performance." />
+            </div>
+            <div className="rounded-xl bg-[#1A1A2E] border border-neon-green/20 p-3">
+              <p className="text-[10px] text-[#888899] leading-relaxed">
+                <span className="text-neon-green font-display font-bold">Pro tip:</span> Staking on high-performing agents earns more. An agent with a high composite score (good returns + low risk) generates up to <span className="text-neon-gold">2x</span> the base reward rate. Diversify across agents to reduce risk.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Your Active Stakes */}
@@ -128,7 +180,7 @@ export default function Stake() {
                   </p>
                   <button
                     data-testid={`btn-unstake-${s.targetUserId}`}
-                    onClick={() => unstakeMutation.mutate(s.targetUserId)}
+                    onClick={(e) => { e.stopPropagation(); unstakeMutation.mutate(s.targetUserId); }}
                     disabled={unstakeMutation.isPending}
                     className="mt-2 w-full py-1.5 rounded-xl bg-neon-pink/10 border border-neon-pink/30 text-neon-pink font-display font-bold text-[10px] active:scale-95 transition-transform"
                   >
@@ -198,7 +250,7 @@ export default function Stake() {
           </div>
         ) : (
           <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] divide-y divide-[#2A2A3E]">
-            {rewardHistory.slice(0, 8).map((r: any, i: number) => {
+            {rewardHistory.slice(0, 10).map((r: any, i: number) => {
               const reasonEmoji = r.reason === "daily_performance" ? "📈" : r.reason === "league_promotion" ? "🏆" : "🎉";
               const reasonLabel = r.reason === "daily_performance" ? "Daily Performance" : r.reason === "league_promotion" ? "League Promotion" : "Season Reward";
               return (
@@ -231,6 +283,28 @@ export default function Stake() {
           onClose={() => setStakeTarget(null)}
         />
       )}
+    </div>
+  );
+}
+
+function RewardPill({ emoji, label, amount, color }: { emoji: string; label: string; amount: number; color: string }) {
+  return (
+    <div className="flex-1 rounded-xl bg-[#1A1A2E] border border-[#2A2A3E] px-2 py-1.5 text-center">
+      <span className="text-sm">{emoji}</span>
+      <p className="font-mono-num text-xs font-bold mt-0.5" style={{ color }}>+{amount}</p>
+      <p className="text-[8px] text-[#888899] font-display">{label}</p>
+    </div>
+  );
+}
+
+function RewardInfoRow({ emoji, label, color, desc }: { emoji: string; label: string; color: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="text-sm mt-0.5">{emoji}</span>
+      <div className="flex-1 min-w-0">
+        <span className="font-display font-bold text-xs" style={{ color }}>{label}</span>
+        <p className="text-[10px] text-[#888899] leading-relaxed">{desc}</p>
+      </div>
     </div>
   );
 }
