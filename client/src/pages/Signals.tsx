@@ -128,6 +128,19 @@ export default function Signals() {
     queryKey: ["/api/hf-agents"],
   });
 
+  const { data: signalSource } = useQuery<{
+    source: string;
+    lastFetch: string | null;
+    fetchStatus: string;
+    liveSignalCount: number;
+    engineUrl: string;
+  }>({
+    queryKey: ["/api/signals/source"],
+    refetchInterval: 60000,
+  });
+
+  const isLive = signalSource?.source === "live";
+
   // Filter by category
   const filteredSignals = (signals || []).filter((s: any) => {
     if (selectedCategory === "All") return true;
@@ -141,13 +154,26 @@ export default function Signals() {
       <header className="sticky top-0 z-40 px-4 py-3" style={{ background: "rgba(10, 10, 15, 0.9)", backdropFilter: "blur(12px)" }}>
         <div className="flex items-center gap-2">
           <span className="text-lg">📡</span>
-          <h1 className="font-display font-bold text-lg text-[#E8E8E8]">LIVE SIGNALS</h1>
-          <span className="relative flex h-2.5 w-2.5 ml-1">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-green opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-neon-green"></span>
-          </span>
+          <h1 className="font-display font-bold text-lg text-[#E8E8E8]">
+            {isLive ? "LIVE" : ""} SIGNALS
+          </h1>
+          {isLive ? (
+            <span className="relative flex h-2.5 w-2.5 ml-1">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neon-green opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-neon-green"></span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-display font-bold text-neon-gold bg-neon-gold/10 border border-neon-gold/20 ml-1">
+              SIMULATED
+            </span>
+          )}
         </div>
-        <p className="text-[10px] text-[#888899] mt-0.5">19 AI Hedge Fund Agents Analyzing Markets</p>
+        <p className="text-[10px] text-[#888899] mt-0.5">
+          19 AI Hedge Fund Agents Analyzing Markets
+          {isLive && signalSource?.lastFetch && (
+            <span className="ml-2 text-neon-green/60">Last sync: {timeAgo(signalSource.lastFetch)}</span>
+          )}
+        </p>
       </header>
 
       {/* Ticker Filter Pills */}

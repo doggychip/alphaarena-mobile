@@ -1335,6 +1335,56 @@ export class MemStorage implements IStorage {
       this.hfAgentStakes.push({ stakerId, hedgeFundAgentId, amount, stakedAt: new Date().toISOString() });
     }
   }
+
+  // === Live Signal Ingestion ===
+
+  // Signal source tracking
+  private _signalSource: "simulated" | "live" = "simulated";
+  private _lastLiveFetch: string | null = null;
+
+  getSignalSource(): { source: string; lastFetch: string | null; liveSignalCount: number } {
+    const liveCount = this.agentSignalsData.filter(s => (s as any)._isLive).length;
+    return { source: this._signalSource, lastFetch: this._lastLiveFetch, liveSignalCount: liveCount };
+  }
+
+  ingestLiveSignals(signals: AgentSignal[]): void {
+    for (const signal of signals) {
+      // Check for duplicates
+      const isDupe = this.agentSignalsData.some(
+        s => s.hedgeFundAgentId === signal.hedgeFundAgentId
+          && s.ticker === signal.ticker
+          && s.createdAt === signal.createdAt
+      );
+      if (!isDupe) {
+        (signal as any)._isLive = true;
+        this.agentSignalsData.push(signal);
+      }
+    }
+
+    // Update agent stats for affected agents
+    const affectedAgents = Array.from(new Set(signals.map(s => s.hedgeFundAgentId)));
+    for (const agentId of affectedAgents) {
+      this.recalcAgentStats(agentId);
+    }
+
+    this._signalSource = "live";
+    this._lastLiveFetch = new Date().toISOString();
+  }
+
+  private recalcAgentStats(agentId: string): void {
+    const agent = this.hedgeFundAgentsMap.get(agentId);
+    if (!agent) return;
+
+    const agentSignals = this.agentSignalsData.filter(s => s.hedgeFundAgentId === agentId);
+    const resolved = agentSignals.filter(s => s.isCorrect !== null);
+    const wins = resolved.filter(s => s.isCorrect === true).length;
+
+    agent.totalSignals = agentSignals.length;
+    agent.winRate = resolved.length > 0 ? Math.round((wins / resolved.length) * 100) : agent.winRate;
+    agent.avgConfidence = agentSignals.length > 0
+      ? Math.round(agentSignals.reduce((sum, s) => sum + s.confidence, 0) / agentSignals.length)
+      : 0;
+  }
 }
 
 export const storage = new MemStorage();

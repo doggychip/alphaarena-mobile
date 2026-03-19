@@ -2,12 +2,30 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { startPriceEngine, getCurrentPrices, getPriceForPair } from "./prices";
+import { startSignalFetcher, getSignalFetchStatus } from "./signalFetcher";
 
 const DEMO_USER_ID = 1;
 
 export async function registerRoutes(httpServer: Server, app: Express) {
   // Start price engine
   startPriceEngine();
+
+  // Start live signal fetcher
+  startSignalFetcher();
+
+  // Signal source status
+  app.get("/api/signals/source", (_req, res) => {
+    const storageStatus = storage.getSignalSource();
+    const fetcherStatus = getSignalFetchStatus();
+    res.json({
+      source: storageStatus.source,
+      lastFetch: fetcherStatus.lastFetchTime,
+      fetchStatus: fetcherStatus.fetchStatus,
+      liveSignalCount: storageStatus.liveSignalCount,
+      error: fetcherStatus.errorMessage,
+      engineUrl: process.env.HF_ENGINE_URL ? "configured" : "not_configured",
+    });
+  });
 
   // Get current user (demo user)
   app.get("/api/me", (_req, res) => {
