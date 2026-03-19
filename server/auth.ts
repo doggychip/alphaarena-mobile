@@ -20,12 +20,15 @@ passport.use(
   new LocalStrategy(async (username, password, done) => {
     try {
       const user = await storage.getUserByUsername(username);
-      if (!user || !user.password) {
-        return done(null, false, { message: "Invalid credentials" });
+      if (!user) {
+        return done(null, false, { message: "Account not found. Please register first." });
+      }
+      if (!user.password) {
+        return done(null, false, { message: "This account has no password set. Please register a new account." });
       }
       const match = await bcrypt.compare(password, user.password);
       if (!match) {
-        return done(null, false, { message: "Invalid credentials" });
+        return done(null, false, { message: "Wrong password. Please try again." });
       }
       return done(null, user);
     } catch (err) {
