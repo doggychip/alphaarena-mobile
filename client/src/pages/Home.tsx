@@ -154,18 +154,18 @@ export default function Home() {
         <PriceTicker prices={prices} />
       </div>
 
-      {/* Agent Discovery Banner — shows until dismissed */}
-      {agent && !localStorage.getItem("alphaarena_picked_agent") && (
+      {/* Agent Discovery Banner — always visible */}
+      {agent && (
         <Link href="/pick-agent">
-          <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-neon-cyan/10 to-neon-pink/10 border border-neon-cyan/30 p-4 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform">
+          <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-neon-cyan/10 to-neon-pink/10 border border-neon-cyan/30 px-4 py-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform">
             <div className="flex -space-x-2">
-              <span className="text-2xl">🐂</span>
-              <span className="text-2xl">🐻</span>
-              <span className="text-2xl">🧠</span>
+              <span className="text-xl">🐂</span>
+              <span className="text-xl">🐻</span>
+              <span className="text-xl">🧠</span>
             </div>
             <div className="flex-1">
-              <p className="font-display font-bold text-sm text-[#E8E8E8]">25 AI Agents available</p>
-              <p className="text-[10px] text-[#888899] mt-0.5">Meme companions & HF analysts — tap to explore & pick yours</p>
+              <p className="font-display font-bold text-xs text-[#E8E8E8]">25 AI Agents — pick your squad</p>
+              <p className="text-[10px] text-[#888899] mt-0.5">Switch or add more agents anytime</p>
             </div>
             <span className="text-neon-cyan text-lg">›</span>
           </div>
@@ -222,12 +222,14 @@ export default function Home() {
                 </button>
               </Link>
             ) : (
-              <button
-                data-testid="btn-follow-agent"
-                className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
-              >
-                Follow Agent's Play
-              </button>
+              <Link href={`/agent`}>
+                <button
+                  data-testid="btn-follow-agent"
+                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
+                >
+                  Follow Agent's Play
+                </button>
+              </Link>
             )}
           </div>
         </div>
