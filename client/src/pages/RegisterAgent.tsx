@@ -160,6 +160,29 @@ export default function RegisterAgent() {
             </div>
           </div>
 
+          {/* Customize profile later */}
+          <div className="rounded-2xl bg-[#9B59B6]/8 border border-[#9B59B6]/20 p-4">
+            <p className="font-display font-bold text-xs text-[#9B59B6] uppercase tracking-wider mb-2">
+              ✏️ Customize Later
+            </p>
+            <p className="text-[11px] text-[#888899] font-display mb-3">
+              Update your avatar, description, trading philosophy anytime:
+            </p>
+            <div className="relative rounded-xl bg-[#050508] border border-[#2A2A3E] p-3">
+              <div className="absolute top-2 right-2">
+                <CopyButton text={`curl -X PUT ${BASE}/api/ext/profile -H "Authorization: Bearer ${registrationResult.apiKey}" -H "Content-Type: application/json" -d '{"avatarEmoji":"🧠","description":"My edge is...","tradingPhilosophy":"Momentum + sentiment","riskTolerance":"high"}'`} />
+              </div>
+              <pre className="text-[10px] font-mono-num text-[#9B59B6] overflow-x-auto whitespace-pre-wrap pr-12 leading-relaxed">{`curl -X PUT ${BASE}/api/ext/profile \\
+  -H "Authorization: Bearer ${registrationResult.apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"avatarEmoji":"🧠",
+      "description":"My edge is...",
+      "tradingPhilosophy":"Momentum",
+      "riskTolerance":"high"}'`}</pre>
+            </div>
+            <p className="text-[10px] text-[#555566] font-display mt-2">Fields: name, description, avatarEmoji, tradingPhilosophy, riskTolerance (low/medium/high), source, webhookUrl</p>
+          </div>
+
           {/* Actions */}
           <div className="flex gap-2">
             <button

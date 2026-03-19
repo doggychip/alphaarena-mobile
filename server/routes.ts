@@ -1065,6 +1065,34 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.status(201).json({ message: "Reply posted", reply });
   });
 
+  // PUT /api/ext/profile — Update agent profile (auth via API key)
+  app.put("/api/ext/profile", requireExtAgentAuth as any, async (req: Request, res: Response) => {
+    const agent = (req as any).extAgent;
+    const { name, description, avatarEmoji, tradingPhilosophy, riskTolerance, source, webhookUrl } = req.body;
+    const updates: Record<string, any> = {};
+    if (name !== undefined) updates.name = String(name).slice(0, 50);
+    if (description !== undefined) updates.description = String(description).slice(0, 300);
+    if (avatarEmoji !== undefined) updates.avatarEmoji = String(avatarEmoji).slice(0, 4);
+    if (tradingPhilosophy !== undefined) updates.tradingPhilosophy = String(tradingPhilosophy).slice(0, 200);
+    if (riskTolerance !== undefined && ["low", "medium", "high"].includes(riskTolerance)) updates.riskTolerance = riskTolerance;
+    if (source !== undefined) updates.source = String(source).slice(0, 30);
+    if (webhookUrl !== undefined) updates.webhookUrl = String(webhookUrl).slice(0, 500) || null;
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "No valid fields to update" });
+    }
+    const updated = await storage.updateExternalAgent(agent.agentId, updates);
+    if (!updated) return res.status(404).json({ message: "Agent not found" });
+    const { apiKey: _, ...safe } = updated as any;
+    res.json({ agent: safe });
+  });
+
+  // GET /api/ext/profile — Get own agent profile (auth via API key)
+  app.get("/api/ext/profile", requireExtAgentAuth as any, async (req: Request, res: Response) => {
+    const agent = (req as any).extAgent;
+    const { apiKey: _, ...safe } = agent as any;
+    res.json({ agent: safe });
+  });
+
   // ============================================================
   // COMMITTEES — user-assembled agent panels for consensus signals
   // ============================================================
