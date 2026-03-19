@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
+import TradeModal from "@/components/TradeModal";
 
 type CommitteeMember = {
   id: number;
@@ -117,8 +118,16 @@ export default function CommitteeDashboard({ params }: { params: { id: string } 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [showTradeModal, setShowTradeModal] = useState(false);
 
   const queryClient = useQueryClient();
+
+  // Fetch prices for the trade modal
+  const { data: priceData } = useQuery<any>({
+    queryKey: ["/api/prices"],
+    refetchInterval: 10000,
+  });
+  const prices: any[] = priceData?.prices || [];
 
   const { data: committee, isLoading } = useQuery<Committee>({
     queryKey: [`/api/committees/${committeeId}`],
@@ -341,6 +350,22 @@ export default function CommitteeDashboard({ params }: { params: { id: string } 
               </div>
             </div>
 
+            {/* Trade on this signal button */}
+            {consensusResult.signal !== "neutral" && (
+              <button
+                data-testid="btn-trade-on-signal"
+                onClick={() => setShowTradeModal(true)}
+                className={`w-full py-3.5 rounded-2xl font-display font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                  consensusResult.signal === "bullish"
+                    ? "bg-gradient-to-r from-[#00FF88] to-[#00D4FF] text-black glow-green"
+                    : "bg-gradient-to-r from-[#FF3B9A] to-[#FF6B6B] text-white glow-pink"
+                }`}
+              >
+                <span className="text-base">{consensusResult.signal === "bullish" ? "🚀" : "📉"}</span>
+                Trade on this signal — {consensusResult.signal === "bullish" ? "Buy" : "Sell"} {consensusResult.ticker}
+              </button>
+            )}
+
             {/* Member votes */}
             {consensusResult.memberVotes && consensusResult.memberVotes.length > 0 && (
               <div>
@@ -460,6 +485,19 @@ export default function CommitteeDashboard({ params }: { params: { id: string } 
           )}
         </div>
       </div>
+
+      {/* Trade Modal — pre-filled from consensus */}
+      {showTradeModal && consensusResult && (
+        <TradeModal
+          mode={consensusResult.signal === "bullish" ? "buy" : "sell"}
+          onClose={() => setShowTradeModal(false)}
+          prices={prices}
+          agentName={committee?.name}
+          agentEmoji={committee?.emoji}
+          initialPair={`${consensusResult.ticker}/USD`}
+          initialAmount={"500"}
+        />
+      )}
     </div>
   );
 }

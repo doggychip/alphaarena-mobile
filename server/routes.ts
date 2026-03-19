@@ -36,6 +36,32 @@ function getUserId(req: Request): number {
   return (req as any).user?.id ?? 1;
 }
 
+// Auto-create portfolio for users who don't have one yet (e.g. newly registered)
+async function ensurePortfolio(userId: number) {
+  let portfolio = await storage.getPortfolio(userId);
+  if (!portfolio) {
+    // Create a default portfolio with $100k starting balance
+    const newPortfolio = {
+      id: Date.now(),
+      userId,
+      competitionId: 1,
+      cashBalance: 100000,
+      totalEquity: 100000,
+    };
+    // Store it directly — MemStorage uses a Map keyed by userId
+    (storage as any).portfolios?.set(userId, newPortfolio);
+    // For DatabaseStorage, try upserting
+    if ((storage as any).db) {
+      try {
+        const { portfolios: portfolioTable } = await import("@shared/schema");
+        await (storage as any).db.insert(portfolioTable).values(newPortfolio).onConflictDoNothing();
+      } catch (e) { /* ignore */ }
+    }
+    portfolio = newPortfolio;
+  }
+  return portfolio;
+}
+
 export async function registerRoutes(httpServer: Server, app: Express) {
   // Start price engine
   startPriceEngine();
@@ -285,7 +311,7 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     const userId = getUserId(req);
     const user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
-    const portfolio = await storage.getPortfolio(userId);
+    const portfolio = await ensurePortfolio(userId);
     const leaderboardEntry = await storage.getLeaderboardEntry(userId);
     const memeAgent = await storage.getAgent(user.selectedAgentType);
     const hfAgent = !memeAgent ? await storage.getHedgeFundAgent(user.selectedAgentType) : null;
@@ -526,8 +552,7 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     const price = getPriceForPair(pair);
     if (!price) return res.status(400).json({ message: "Invalid pair" });
 
-    const portfolio = await storage.getPortfolio(userId);
-    if (!portfolio) return res.status(404).json({ message: "Portfolio not found" });
+    const portfolio = await ensurePortfolio(userId);
 
     const totalValue = price * quantity;
     const fee = totalValue * 0.001; // 0.1% fee

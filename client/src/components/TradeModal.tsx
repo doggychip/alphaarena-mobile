@@ -8,13 +8,15 @@ interface TradeModalProps {
   prices: any[];
   agentName?: string;
   agentEmoji?: string;
+  initialPair?: string;
+  initialAmount?: string;
 }
 
 const PRESETS = [100, 500, 1000];
 
-export default function TradeModal({ mode, onClose, prices, agentName, agentEmoji }: TradeModalProps) {
-  const [selectedPair, setSelectedPair] = useState("BTC/USD");
-  const [amount, setAmount] = useState("");
+export default function TradeModal({ mode, onClose, prices, agentName, agentEmoji, initialPair, initialAmount }: TradeModalProps) {
+  const [selectedPair, setSelectedPair] = useState(initialPair || "BTC/USD");
+  const [amount, setAmount] = useState(initialAmount || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -52,10 +54,10 @@ export default function TradeModal({ mode, onClose, prices, agentName, agentEmoj
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
-        className="relative w-full max-w-[430px] rounded-t-3xl bg-[#12121A] border-t border-[#2A2A3E] p-4 pb-8"
+        className="relative w-full max-w-[430px] rounded-t-3xl bg-[#12121A] border-t border-[#2A2A3E] p-4 pb-24"
         onClick={e => e.stopPropagation()}
       >
         {/* Drag handle */}
