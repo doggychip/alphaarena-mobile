@@ -55,7 +55,6 @@ function TimeHorizonBadge({ horizon }: { horizon: string }) {
 }
 
 function SignalCard({ signal, agents }: { signal: any; agents: any[] }) {
-  const [expanded, setExpanded] = useState(false);
   const agent = agents.find((a: any) => a.agentId === signal.hedgeFundAgentId);
   if (!agent) return null;
 
@@ -68,45 +67,40 @@ function SignalCard({ signal, agents }: { signal: any; agents: any[] }) {
   }
 
   return (
-    <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-3">
-      <div className="flex items-start gap-2.5">
-        <Link href={`/signals/${agent.agentId}`}>
-          <div className="w-10 h-10 rounded-full bg-[#0A0A0F] border border-[#2A2A3E] flex items-center justify-center text-xl flex-shrink-0 cursor-pointer hover:border-neon-cyan/50 transition-colors">
+    <Link href={`/signals/${agent.agentId}`}>
+      <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-3 cursor-pointer active:scale-[0.98] transition-transform hover:border-[#3A3A4E]">
+        <div className="flex items-start gap-2.5">
+          <div className="w-10 h-10 rounded-full bg-[#0A0A0F] border border-[#2A2A3E] flex items-center justify-center text-xl flex-shrink-0">
             {agent.avatarEmoji}
           </div>
-        </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link href={`/signals/${agent.agentId}`}>
-              <span className="font-display font-bold text-sm text-[#E8E8E8] cursor-pointer hover:text-neon-cyan transition-colors">{agent.name}</span>
-            </Link>
-            <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-[#2A2A3E] text-[#888899] font-display">{agent.category}</span>
-          </div>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
-            <SignalBadge signal={signal.signal} />
-            <span className="font-display font-bold text-xs text-[#E8E8E8]">{signal.ticker}</span>
-            {signal.targetPrice && (
-              <span className="text-[10px] font-mono-num text-[#888899]">
-                TP: ${signal.targetPrice < 1 ? signal.targetPrice.toFixed(4) : signal.targetPrice.toLocaleString()}
-              </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-display font-bold text-sm text-[#E8E8E8]">{agent.name}</span>
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-[#2A2A3E] text-[#888899] font-display">{agent.category}</span>
+            </div>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <SignalBadge signal={signal.signal} />
+              <span className="font-display font-bold text-xs text-[#E8E8E8]">{signal.ticker}</span>
+              {signal.targetPrice && (
+                <span className="text-[10px] font-mono-num text-[#888899]">
+                  TP: ${signal.targetPrice < 1 ? signal.targetPrice.toFixed(4) : signal.targetPrice.toLocaleString()}
+                </span>
+              )}
+              {signal.timeHorizon && <TimeHorizonBadge horizon={signal.timeHorizon} />}
+            </div>
+            <div className="mt-1.5">
+              <ConfidenceBar confidence={signal.confidence} />
+            </div>
+            {reasoning && (
+              <p className="text-[11px] text-[#888899] mt-1.5 leading-relaxed line-clamp-2">
+                {reasoning}
+              </p>
             )}
-            {signal.timeHorizon && <TimeHorizonBadge horizon={signal.timeHorizon} />}
+            <p className="text-[9px] text-[#555566] mt-1">{timeAgo(signal.createdAt)}</p>
           </div>
-          <div className="mt-1.5">
-            <ConfidenceBar confidence={signal.confidence} />
-          </div>
-          {reasoning && (
-            <p
-              className={`text-[11px] text-[#888899] mt-1.5 leading-relaxed cursor-pointer ${expanded ? "" : "line-clamp-2"}`}
-              onClick={() => setExpanded(!expanded)}
-            >
-              {reasoning}
-            </p>
-          )}
-          <p className="text-[9px] text-[#555566] mt-1">{timeAgo(signal.createdAt)}</p>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
 
