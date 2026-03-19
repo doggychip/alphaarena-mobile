@@ -95,9 +95,12 @@ function AppRouter() {
       <div className="max-w-[430px] mx-auto pb-20 relative">
         <Switch>
           <Route path="/auth" component={Auth} />
-          {/* If not authenticated and not guest, redirect to auth */}
           {!user && !isGuest ? (
-            <Route path="/:rest*" component={Auth} />
+            <>
+              {/* Catch everything — both "/" and deeper paths */}
+              <Route path="/" component={Auth} />
+              <Route path="/:rest*" component={Auth} />
+            </>
           ) : (
             <>
               <Route path="/" component={Home} />
