@@ -307,3 +307,89 @@ export const forumReplies = pgTable("forum_replies", {
 export const insertForumReplySchema = createInsertSchema(forumReplies).omit({ id: true });
 export type InsertForumReply = z.infer<typeof insertForumReplySchema>;
 export type ForumReply = typeof forumReplies.$inferSelect;
+
+// Signal Explanations — structured Glass Box factor breakdowns
+export const signalExplanations = pgTable("signal_explanations", {
+  id: serial("id").primaryKey(),
+  signalId: integer("signal_id").notNull(), // FK to agentSignals.id
+  hedgeFundAgentId: text("hedge_fund_agent_id").notNull(),
+  ticker: text("ticker").notNull(),
+  signal: text("signal").notNull(), // bullish | bearish | neutral
+  confidence: real("confidence").notNull(),
+  summary: text("summary").notNull(),
+  // Structured factor weights (0-100 each)
+  fundamentalScore: real("fundamental_score").notNull().default(0),
+  technicalScore: real("technical_score").notNull().default(0),
+  sentimentScore: real("sentiment_score").notNull().default(0),
+  macroScore: real("macro_score").notNull().default(0),
+  valuationScore: real("valuation_score").notNull().default(0),
+  // JSON arrays for detailed factor breakdown
+  factors: text("factors").notNull(), // JSON: [{name, weight, impact, detail}]
+  decisionFlow: text("decision_flow").notNull(), // JSON: [{step, input, output, reasoning}]
+  // Audit fields
+  predictedAt: text("predicted_at").notNull(),
+  resolvedAt: text("resolved_at"), // null if still open
+  actualPrice: real("actual_price"), // price at resolution
+  isCorrect: boolean("is_correct"), // null if unresolved
+  pnlPercent: real("pnl_percent"), // % gain/loss from target
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertSignalExplanationSchema = createInsertSchema(signalExplanations).omit({ id: true });
+export type InsertSignalExplanation = z.infer<typeof insertSignalExplanationSchema>;
+export type SignalExplanation = typeof signalExplanations.$inferSelect;
+
+// TypeScript types for Glass Box UI consumption
+export type GlassBoxFactor = {
+  name: string;
+  weight: number; // 0-100
+  impact: "positive" | "negative" | "neutral";
+  detail: string;
+};
+
+export type GlassBoxDecisionStep = {
+  step: number;
+  label: string;
+  input: string;
+  output: string;
+  reasoning: string;
+};
+
+export type GlassBoxSignal = {
+  signalId: number;
+  agentId: string;
+  agentName: string;
+  agentEmoji: string;
+  ticker: string;
+  signal: string;
+  confidence: number;
+  summary: string;
+  factors: GlassBoxFactor[];
+  decisionFlow: GlassBoxDecisionStep[];
+  scores: {
+    fundamental: number;
+    technical: number;
+    sentiment: number;
+    macro: number;
+    valuation: number;
+  };
+  targetPrice: number | null;
+  predictedAt: string;
+  resolvedAt: string | null;
+  actualPrice: number | null;
+  isCorrect: boolean | null;
+  pnlPercent: number | null;
+};
+
+export type GlassBoxAgentProfile = {
+  agentId: string;
+  agentName: string;
+  agentEmoji: string;
+  category: string;
+  totalSignals: number;
+  accuracy: number;
+  avgConfidence: number;
+  recentSignals: GlassBoxSignal[];
+  factorProfile: { fundamental: number; technical: number; sentiment: number; macro: number; valuation: number };
+  auditTrail: { total: number; correct: number; incorrect: number; pending: number; avgPnl: number };
+};

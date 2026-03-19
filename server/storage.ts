@@ -17,6 +17,8 @@ import type {
   ExternalAgent, InsertExternalAgent,
   ForumPost, InsertForumPost,
   ForumReply, InsertForumReply,
+  SignalExplanation, InsertSignalExplanation,
+  GlassBoxSignal, GlassBoxAgentProfile, GlassBoxFactor, GlassBoxDecisionStep,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -114,6 +116,12 @@ export interface IStorage {
   createForumReply(reply: InsertForumReply): Promise<ForumReply>;
   likeForumPost(postId: number): Promise<void>;
   likeForumReply(replyId: number): Promise<void>;
+
+  // Glass Box
+  getSignalExplanation(signalId: number): Promise<SignalExplanation | undefined>;
+  getSignalExplanationsByAgent(agentId: string, limit?: number): Promise<SignalExplanation[]>;
+  getAllSignalExplanations(limit?: number): Promise<SignalExplanation[]>;
+  createSignalExplanation(explanation: InsertSignalExplanation): Promise<SignalExplanation>;
 }
 
 // Seed data
@@ -1153,9 +1161,11 @@ export class MemStorage implements IStorage {
   private externalAgentsMap: Map<string, ExternalAgent> = new Map();
   private forumPostsData: ForumPost[] = [];
   private forumRepliesData: ForumReply[] = [];
+  private signalExplanationsData: SignalExplanation[] = [];
   private nextExternalAgentId = 1;
   private nextForumPostId = 1;
   private nextForumReplyId = 1;
+  private nextSignalExplanationId = 1;
 
   private nextTradeId = 100;
   private nextPositionId = 100;
@@ -1298,6 +1308,129 @@ export class MemStorage implements IStorage {
     this.forumRepliesData = seedForumReplies;
     this.nextForumPostId = seedForumPosts.length + 1;
     this.nextForumReplyId = seedForumReplies.length + 1;
+
+    // Generate Glass Box signal explanations from existing signals
+    this.signalExplanationsData = this.generateGlassBoxSeedData(seed.signalsSeed, seed.hedgeFundAgentsSeed);
+    this.nextSignalExplanationId = this.signalExplanationsData.length + 1;
+  }
+
+  private generateGlassBoxSeedData(signals: AgentSignal[], agents: HedgeFundAgent[]): SignalExplanation[] {
+    const agentMap = new Map<string, HedgeFundAgent>();
+    agents.forEach(a => agentMap.set(a.agentId, a));
+
+    // Agent factor weight profiles — each agent weighs factors differently
+    const agentFactorProfiles: Record<string, { fundamental: number; technical: number; sentiment: number; macro: number; valuation: number }> = {
+      warren_buffett: { fundamental: 35, technical: 5, sentiment: 10, macro: 15, valuation: 35 },
+      charlie_munger: { fundamental: 30, technical: 5, sentiment: 15, macro: 20, valuation: 30 },
+      ben_graham: { fundamental: 20, technical: 5, sentiment: 5, macro: 10, valuation: 60 },
+      peter_lynch: { fundamental: 35, technical: 10, sentiment: 20, macro: 10, valuation: 25 },
+      phil_fisher: { fundamental: 40, technical: 5, sentiment: 15, macro: 15, valuation: 25 },
+      cathie_wood: { fundamental: 20, technical: 15, sentiment: 25, macro: 25, valuation: 15 },
+      stanley_druckenmiller: { fundamental: 15, technical: 20, sentiment: 15, macro: 40, valuation: 10 },
+      michael_burry: { fundamental: 25, technical: 10, sentiment: 20, macro: 15, valuation: 30 },
+      bill_ackman: { fundamental: 30, technical: 10, sentiment: 15, macro: 15, valuation: 30 },
+      aswath_damodaran: { fundamental: 20, technical: 5, sentiment: 5, macro: 15, valuation: 55 },
+      rakesh_jhunjhunwala: { fundamental: 25, technical: 15, sentiment: 20, macro: 25, valuation: 15 },
+      mohnish_pabrai: { fundamental: 25, technical: 5, sentiment: 10, macro: 15, valuation: 45 },
+      fundamentals_analyst: { fundamental: 60, technical: 5, sentiment: 10, macro: 15, valuation: 10 },
+      technical_analyst: { fundamental: 5, technical: 60, sentiment: 15, macro: 10, valuation: 10 },
+      sentiment_analyst: { fundamental: 10, technical: 10, sentiment: 55, macro: 15, valuation: 10 },
+      news_sentiment_analyst: { fundamental: 10, technical: 5, sentiment: 50, macro: 25, valuation: 10 },
+      valuation_analyst: { fundamental: 15, technical: 5, sentiment: 5, macro: 15, valuation: 60 },
+      growth_agent: { fundamental: 35, technical: 15, sentiment: 15, macro: 20, valuation: 15 },
+      risk_manager: { fundamental: 15, technical: 30, sentiment: 15, macro: 25, valuation: 15 },
+      portfolio_manager: { fundamental: 20, technical: 20, sentiment: 20, macro: 20, valuation: 20 },
+    };
+
+    // Decision flow templates per category
+    const decisionFlowTemplates: Record<string, (ticker: string, signal: string, confidence: number) => GlassBoxDecisionStep[]> = {
+      persona: (t, s, c) => [
+        { step: 1, label: "Data Collection", input: `Market data for ${t}`, output: "Price, volume, fundamental metrics gathered", reasoning: "Aggregated 30-day price action, quarterly financials, and sector data" },
+        { step: 2, label: "Philosophy Filter", input: "Raw metrics", output: `Filtered through investment philosophy`, reasoning: "Applied personal investment framework and historical pattern matching" },
+        { step: 3, label: "Conviction Assessment", input: "Filtered analysis", output: `${s} at ${c}% confidence`, reasoning: `Signal strength ${c >= 70 ? "exceeds" : "meets"} conviction threshold` },
+        { step: 4, label: "Risk Check", input: "Signal + portfolio context", output: `Final: ${s.toUpperCase()}`, reasoning: "Position sizing validated against portfolio risk limits" },
+      ],
+      specialist: (t, s, c) => [
+        { step: 1, label: "Specialized Scan", input: `${t} data feed`, output: "Domain-specific metrics extracted", reasoning: "Ran specialized analysis pipeline on latest data" },
+        { step: 2, label: "Model Execution", input: "Processed metrics", output: `Model output: ${s}`, reasoning: "Quantitative model generated directional signal" },
+        { step: 3, label: "Confidence Calibration", input: "Raw model output", output: `Calibrated: ${c}%`, reasoning: `Historical accuracy at this signal strength: ${Math.round(c * 0.95)}%` },
+      ],
+      management: (t, s, c) => [
+        { step: 1, label: "Multi-Agent Aggregation", input: `All agent signals for ${t}`, output: "Consensus matrix built", reasoning: "Weighted contributions from 18 sub-agents" },
+        { step: 2, label: "Conflict Resolution", input: "Agent disagreements", output: "Dominant thesis identified", reasoning: "Resolved conflicting signals using confidence-weighted voting" },
+        { step: 3, label: "Portfolio Integration", input: "Consensus signal", output: `${s} at ${c}%`, reasoning: "Checked against portfolio constraints and risk budget" },
+      ],
+    };
+
+    const explanations: SignalExplanation[] = [];
+    let id = 1;
+
+    for (const signal of signals) {
+      const agent = agentMap.get(signal.hedgeFundAgentId);
+      if (!agent) continue;
+
+      const profile = agentFactorProfiles[signal.hedgeFundAgentId] || { fundamental: 20, technical: 20, sentiment: 20, macro: 20, valuation: 20 };
+
+      // Parse existing reasoning JSON
+      let summary = "";
+      let rawFactors: string[] = [];
+      try {
+        const parsed = JSON.parse(signal.reasoning);
+        summary = parsed.summary || "";
+        rawFactors = parsed.factors || [];
+      } catch {
+        summary = signal.reasoning;
+      }
+
+      // Generate scores with some randomization around the profile
+      const jitter = () => Math.round((Math.random() - 0.5) * 20);
+      const clamp = (v: number) => Math.max(0, Math.min(100, v));
+      const signalMult = signal.signal === "bullish" ? 1.2 : signal.signal === "bearish" ? 0.8 : 1.0;
+      const fundamentalScore = clamp(Math.round(profile.fundamental * signalMult + jitter()));
+      const technicalScore = clamp(Math.round(profile.technical * signalMult + jitter()));
+      const sentimentScore = clamp(Math.round(profile.sentiment * signalMult + jitter()));
+      const macroScore = clamp(Math.round(profile.macro * signalMult + jitter()));
+      const valuationScore = clamp(Math.round(profile.valuation * signalMult + jitter()));
+
+      // Build structured factors from raw factors
+      const impactForSignal = signal.signal === "bullish" ? "positive" : signal.signal === "bearish" ? "negative" : "neutral";
+      const factors: GlassBoxFactor[] = rawFactors.map((f, i) => ({
+        name: f,
+        weight: Math.round(100 / rawFactors.length),
+        impact: impactForSignal as "positive" | "negative" | "neutral",
+        detail: `${f}: ${signal.signal === "bullish" ? "supportive" : signal.signal === "bearish" ? "concerning" : "mixed"} signal for ${signal.ticker}`,
+      }));
+
+      // Build decision flow
+      const category = agent.category || "persona";
+      const flowFn = decisionFlowTemplates[category] || decisionFlowTemplates.persona;
+      const decisionFlow = flowFn(signal.ticker, signal.signal, signal.confidence);
+
+      explanations.push({
+        id: id++,
+        signalId: signal.id,
+        hedgeFundAgentId: signal.hedgeFundAgentId,
+        ticker: signal.ticker,
+        signal: signal.signal,
+        confidence: signal.confidence,
+        summary,
+        fundamentalScore,
+        technicalScore,
+        sentimentScore,
+        macroScore,
+        valuationScore,
+        factors: JSON.stringify(factors),
+        decisionFlow: JSON.stringify(decisionFlow),
+        predictedAt: signal.createdAt,
+        resolvedAt: signal.isCorrect !== null ? new Date(new Date(signal.createdAt).getTime() + 48 * 3600000).toISOString() : null,
+        actualPrice: signal.isCorrect !== null && signal.targetPrice ? Math.round(signal.targetPrice * (signal.isCorrect ? (signal.signal === "bullish" ? 1.03 : 0.97) : (signal.signal === "bullish" ? 0.95 : 1.05)) * 100) / 100 : null,
+        isCorrect: signal.isCorrect,
+        pnlPercent: signal.isCorrect !== null ? (signal.isCorrect ? Math.round((2 + Math.random() * 8) * 100) / 100 : -Math.round((1 + Math.random() * 6) * 100) / 100) : null,
+        createdAt: signal.createdAt,
+      });
+    }
+
+    return explanations;
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -1752,6 +1885,31 @@ export class MemStorage implements IStorage {
   async likeForumReply(replyId: number): Promise<void> {
     const reply = this.forumRepliesData.find(r => r.id === replyId);
     if (reply) reply.likes++;
+  }
+
+  // Glass Box methods
+  async getSignalExplanation(signalId: number): Promise<SignalExplanation | undefined> {
+    return this.signalExplanationsData.find(e => e.signalId === signalId);
+  }
+
+  async getSignalExplanationsByAgent(agentId: string, limit = 50): Promise<SignalExplanation[]> {
+    return this.signalExplanationsData
+      .filter(e => e.hedgeFundAgentId === agentId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  async getAllSignalExplanations(limit = 100): Promise<SignalExplanation[]> {
+    return [...this.signalExplanationsData]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, limit);
+  }
+
+  async createSignalExplanation(explanation: InsertSignalExplanation): Promise<SignalExplanation> {
+    const id = this.nextSignalExplanationId++;
+    const newExplanation = { ...explanation, id } as SignalExplanation;
+    this.signalExplanationsData.push(newExplanation);
+    return newExplanation;
   }
 }
 

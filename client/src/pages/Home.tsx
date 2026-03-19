@@ -498,6 +498,20 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Glass Box Entry */}
+      <Link href="/glassbox">
+        <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-[#00D4FF]/10 to-[#9B59B6]/10 border border-[#00D4FF]/30 p-4 active:scale-[0.98] transition-transform cursor-pointer">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00D4FF]/15 flex items-center justify-center text-xl">🔍</div>
+            <div className="flex-1">
+              <p className="text-xs font-display font-bold text-[#E8E8E8]">Glass Box Transparency</p>
+              <p className="text-[10px] text-[#888899] mt-0.5">See inside every AI decision — factor weights, reasoning chains, accuracy audit</p>
+            </div>
+            <span className="text-[#00D4FF] text-sm">→</span>
+          </div>
+        </div>
+      </Link>
+
       {/* Leaderboard Preview */}
       <div className="mx-4 mt-4 mb-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
         <div className="flex items-center justify-between mb-3">

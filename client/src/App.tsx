@@ -16,6 +16,7 @@ import Auth from "@/pages/Auth";
 import HowToPlay from "@/pages/HowToPlay";
 import AgentPicker from "@/pages/AgentPicker";
 import Forum from "@/pages/Forum";
+import GlassBox from "@/pages/GlassBox";
 import NotFound from "@/pages/not-found";
 
 function LoadingScreen() {
@@ -112,6 +113,7 @@ function AppRouter() {
               <Route path="/signals" component={Signals} />
               <Route path="/signals/:agentId" component={HFAgentDetail} />
               <Route path="/forum" component={Forum} />
+              <Route path="/glassbox" component={GlassBox} />
               <Route path="/stake" component={Stake} />
               <Route path="/profile" component={Profile} />
               <Route path="/how-to-play" component={HowToPlay} />

@@ -1110,4 +1110,204 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     await storage.likeForumReply(replyId);
     res.json({ message: "Liked" });
   });
+
+  // ============================================================
+  // GLASS BOX — Signal Explainability + Audit Trail + Dashboard
+  // ============================================================
+
+  // Dashboard: live overview of all agent decisions with aggregated stats
+  app.get("/api/glassbox/dashboard", async (_req: Request, res: Response) => {
+    const explanations = await storage.getAllSignalExplanations(200);
+    const agents = await storage.getAllHedgeFundAgents();
+
+    // Aggregate stats
+    const resolved = explanations.filter(e => e.isCorrect !== null);
+    const correct = resolved.filter(e => e.isCorrect === true);
+    const totalSignals = explanations.length;
+    const overallAccuracy = resolved.length > 0 ? Math.round((correct.length / resolved.length) * 100) : 0;
+    const avgConfidence = totalSignals > 0 ? Math.round(explanations.reduce((s, e) => s + e.confidence, 0) / totalSignals) : 0;
+
+    // Signal distribution
+    const bullish = explanations.filter(e => e.signal === "bullish").length;
+    const bearish = explanations.filter(e => e.signal === "bearish").length;
+    const neutral = explanations.filter(e => e.signal === "neutral").length;
+
+    // Per-agent summary
+    const agentSummaries = agents.map(agent => {
+      const agentExps = explanations.filter(e => e.hedgeFundAgentId === agent.agentId);
+      const agentResolved = agentExps.filter(e => e.isCorrect !== null);
+      const agentCorrect = agentResolved.filter(e => e.isCorrect === true);
+      const avgFundamental = agentExps.length > 0 ? Math.round(agentExps.reduce((s, e) => s + e.fundamentalScore, 0) / agentExps.length) : 0;
+      const avgTechnical = agentExps.length > 0 ? Math.round(agentExps.reduce((s, e) => s + e.technicalScore, 0) / agentExps.length) : 0;
+      const avgSentiment = agentExps.length > 0 ? Math.round(agentExps.reduce((s, e) => s + e.sentimentScore, 0) / agentExps.length) : 0;
+      const avgMacro = agentExps.length > 0 ? Math.round(agentExps.reduce((s, e) => s + e.macroScore, 0) / agentExps.length) : 0;
+      const avgValuation = agentExps.length > 0 ? Math.round(agentExps.reduce((s, e) => s + e.valuationScore, 0) / agentExps.length) : 0;
+
+      return {
+        agentId: agent.agentId,
+        agentName: agent.name,
+        agentEmoji: agent.avatarEmoji,
+        category: agent.category,
+        totalSignals: agentExps.length,
+        accuracy: agentResolved.length > 0 ? Math.round((agentCorrect.length / agentResolved.length) * 100) : 0,
+        avgConfidence: agentExps.length > 0 ? Math.round(agentExps.reduce((s, e) => s + e.confidence, 0) / agentExps.length) : 0,
+        factorProfile: { fundamental: avgFundamental, technical: avgTechnical, sentiment: avgSentiment, macro: avgMacro, valuation: avgValuation },
+        latestSignal: agentExps[0] ? {
+          ticker: agentExps[0].ticker,
+          signal: agentExps[0].signal,
+          confidence: agentExps[0].confidence,
+          predictedAt: agentExps[0].predictedAt,
+        } : null,
+      };
+    }).sort((a, b) => b.accuracy - a.accuracy);
+
+    // Recent activity feed (latest 20 explanations with agent info)
+    const recentActivity = explanations.slice(0, 20).map(e => {
+      const agent = agents.find(a => a.agentId === e.hedgeFundAgentId);
+      return {
+        signalId: e.signalId,
+        agentId: e.hedgeFundAgentId,
+        agentName: agent?.name || e.hedgeFundAgentId,
+        agentEmoji: agent?.avatarEmoji || "🤖",
+        ticker: e.ticker,
+        signal: e.signal,
+        confidence: e.confidence,
+        summary: e.summary,
+        isCorrect: e.isCorrect,
+        pnlPercent: e.pnlPercent,
+        predictedAt: e.predictedAt,
+      };
+    });
+
+    // Audit stats
+    const pending = explanations.filter(e => e.isCorrect === null).length;
+    const avgPnl = resolved.length > 0 ? Math.round(resolved.reduce((s, e) => s + (e.pnlPercent || 0), 0) / resolved.length * 100) / 100 : 0;
+
+    res.json({
+      overview: { totalSignals, overallAccuracy, avgConfidence, bullish, bearish, neutral },
+      audit: { resolved: resolved.length, correct: correct.length, incorrect: resolved.length - correct.length, pending, avgPnl },
+      agentSummaries,
+      recentActivity,
+    });
+  });
+
+  // Single signal explainability — full reasoning chain
+  app.get("/api/glassbox/signal/:id", async (req: Request, res: Response) => {
+    const signalId = parseInt(String(req.params.id));
+    const explanation = await storage.getSignalExplanation(signalId);
+    if (!explanation) return res.status(404).json({ message: "Signal explanation not found" });
+
+    const agent = await storage.getHedgeFundAgent(explanation.hedgeFundAgentId);
+
+    let factors = [];
+    let decisionFlow = [];
+    try { factors = JSON.parse(explanation.factors); } catch {}
+    try { decisionFlow = JSON.parse(explanation.decisionFlow); } catch {}
+
+    res.json({
+      signalId: explanation.signalId,
+      agentId: explanation.hedgeFundAgentId,
+      agentName: agent?.name || explanation.hedgeFundAgentId,
+      agentEmoji: agent?.avatarEmoji || "🤖",
+      agentCategory: agent?.category || "unknown",
+      ticker: explanation.ticker,
+      signal: explanation.signal,
+      confidence: explanation.confidence,
+      summary: explanation.summary,
+      factors,
+      decisionFlow,
+      scores: {
+        fundamental: explanation.fundamentalScore,
+        technical: explanation.technicalScore,
+        sentiment: explanation.sentimentScore,
+        macro: explanation.macroScore,
+        valuation: explanation.valuationScore,
+      },
+      targetPrice: null as number | null, // from parent signal if needed
+      predictedAt: explanation.predictedAt,
+      resolvedAt: explanation.resolvedAt,
+      actualPrice: explanation.actualPrice,
+      isCorrect: explanation.isCorrect,
+      pnlPercent: explanation.pnlPercent,
+    });
+  });
+
+  // Agent Glass Box profile — full audit trail + factor profile
+  app.get("/api/glassbox/agent/:agentId", async (req: Request, res: Response) => {
+    const agentId = String(req.params.agentId);
+    const agent = await storage.getHedgeFundAgent(agentId);
+    if (!agent) return res.status(404).json({ message: "Agent not found" });
+
+    const explanations = await storage.getSignalExplanationsByAgent(agentId, 100);
+    const resolved = explanations.filter(e => e.isCorrect !== null);
+    const correct = resolved.filter(e => e.isCorrect === true);
+    const incorrect = resolved.filter(e => e.isCorrect === false);
+    const pending = explanations.filter(e => e.isCorrect === null);
+
+    const avgPnl = resolved.length > 0 ? Math.round(resolved.reduce((s, e) => s + (e.pnlPercent || 0), 0) / resolved.length * 100) / 100 : 0;
+
+    // Factor profile averages
+    const n = explanations.length || 1;
+    const factorProfile = {
+      fundamental: Math.round(explanations.reduce((s, e) => s + e.fundamentalScore, 0) / n),
+      technical: Math.round(explanations.reduce((s, e) => s + e.technicalScore, 0) / n),
+      sentiment: Math.round(explanations.reduce((s, e) => s + e.sentimentScore, 0) / n),
+      macro: Math.round(explanations.reduce((s, e) => s + e.macroScore, 0) / n),
+      valuation: Math.round(explanations.reduce((s, e) => s + e.valuationScore, 0) / n),
+    };
+
+    // Build recent signals with parsed factors
+    const recentSignals = explanations.slice(0, 20).map(e => {
+      let factors = [];
+      let decisionFlow = [];
+      try { factors = JSON.parse(e.factors); } catch {}
+      try { decisionFlow = JSON.parse(e.decisionFlow); } catch {}
+      return {
+        signalId: e.signalId,
+        agentId: e.hedgeFundAgentId,
+        agentName: agent.name,
+        agentEmoji: agent.avatarEmoji,
+        ticker: e.ticker,
+        signal: e.signal,
+        confidence: e.confidence,
+        summary: e.summary,
+        factors,
+        decisionFlow,
+        scores: {
+          fundamental: e.fundamentalScore,
+          technical: e.technicalScore,
+          sentiment: e.sentimentScore,
+          macro: e.macroScore,
+          valuation: e.valuationScore,
+        },
+        targetPrice: null as number | null,
+        predictedAt: e.predictedAt,
+        resolvedAt: e.resolvedAt,
+        actualPrice: e.actualPrice,
+        isCorrect: e.isCorrect,
+        pnlPercent: e.pnlPercent,
+      };
+    });
+
+    res.json({
+      agentId: agent.agentId,
+      agentName: agent.name,
+      agentEmoji: agent.avatarEmoji,
+      category: agent.category,
+      description: agent.description,
+      tradingPhilosophy: agent.tradingPhilosophy,
+      totalSignals: explanations.length,
+      accuracy: resolved.length > 0 ? Math.round((correct.length / resolved.length) * 100) : 0,
+      avgConfidence: Math.round(explanations.reduce((s, e) => s + e.confidence, 0) / n),
+      factorProfile,
+      auditTrail: {
+        total: explanations.length,
+        correct: correct.length,
+        incorrect: incorrect.length,
+        pending: pending.length,
+        avgPnl,
+      },
+      recentSignals,
+    });
+  });
 }
