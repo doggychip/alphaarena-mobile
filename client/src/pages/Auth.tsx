@@ -137,7 +137,7 @@ export default function Auth() {
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="login-username" className="text-[#888899] text-xs font-display tracking-wider uppercase">
-                    Username
+                    Username <span className="normal-case tracking-normal text-[#555566]">(not case-sensitive)</span>
                   </Label>
                   <Input
                     id="login-username"
