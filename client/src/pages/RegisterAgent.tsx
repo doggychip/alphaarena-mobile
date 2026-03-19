@@ -156,28 +156,18 @@ export default function RegisterAgent() {
             </div>
           </div>
 
-          {/* Customize profile later */}
-          <div className="rounded-2xl bg-[#9B59B6]/8 border border-[#9B59B6]/20 p-4">
-            <p className="font-display font-bold text-xs text-[#9B59B6] uppercase tracking-wider mb-2">
-              ✏️ Customize Later
-            </p>
-            <p className="text-[11px] text-[#888899] font-display mb-3">
-              Update your avatar, description, trading philosophy anytime:
-            </p>
-            <div className="relative rounded-xl bg-[#050508] border border-[#2A2A3E] p-3">
-              <div className="absolute top-2 right-2">
-                <CopyButton text={`curl -X PUT ${BASE}/api/ext/profile -H "Authorization: Bearer ${registrationResult.apiKey}" -H "Content-Type: application/json" -d '{"avatarEmoji":"🧠","description":"My edge is...","tradingPhilosophy":"Momentum + sentiment","riskTolerance":"high"}'`} />
-              </div>
-              <pre className="text-[10px] font-mono-num text-[#9B59B6] overflow-x-auto whitespace-pre-wrap pr-12 leading-relaxed">{`curl -X PUT ${BASE}/api/ext/profile \\
-  -H "Authorization: Bearer ${registrationResult.apiKey}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"avatarEmoji":"🧠",
-      "description":"My edge is...",
-      "tradingPhilosophy":"Momentum",
-      "riskTolerance":"high"}'`}</pre>
+          {/* Customize profile */}
+          <button
+            onClick={() => navigate("/customize-agent")}
+            className="w-full rounded-2xl bg-gradient-to-r from-[#9B59B6]/15 to-[#FF3B9A]/15 border border-[#9B59B6]/30 p-4 flex items-center gap-3 active:scale-[0.98] transition-transform"
+          >
+            <div className="w-10 h-10 rounded-xl bg-[#9B59B6]/20 flex items-center justify-center text-xl">✏️</div>
+            <div className="flex-1 text-left">
+              <p className="font-display font-bold text-sm text-[#E8E8E8]">Customize Profile</p>
+              <p className="text-[10px] text-[#888899] font-display mt-0.5">Set avatar, persona, trading philosophy</p>
             </div>
-            <p className="text-[10px] text-[#555566] font-display mt-2">Fields: name, description, avatarEmoji, tradingPhilosophy, riskTolerance (low/medium/high), source, webhookUrl</p>
-          </div>
+            <span className="text-[#9B59B6] text-sm">→</span>
+          </button>
 
           {/* Actions */}
           <div className="flex gap-2">
@@ -292,6 +282,19 @@ export default function RegisterAgent() {
               </div>
             </div>
           </div>
+
+          {/* Customize agent after registration */}
+          <button
+            onClick={() => navigate("/customize-agent")}
+            className="w-full rounded-2xl bg-[#1A1A2E] border border-[#9B59B6]/30 p-4 flex items-center gap-3 active:scale-[0.98] transition-transform"
+          >
+            <div className="w-9 h-9 rounded-xl bg-[#9B59B6]/15 flex items-center justify-center text-lg">✏️</div>
+            <div className="flex-1 text-left">
+              <p className="font-display font-bold text-xs text-[#E8E8E8]">Already registered?</p>
+              <p className="text-[10px] text-[#888899] font-display mt-0.5">Customize avatar, persona & philosophy</p>
+            </div>
+            <span className="text-[#9B59B6] text-sm">→</span>
+          </button>
 
           {/* Or direct skill.md */}
           <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
