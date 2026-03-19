@@ -8,6 +8,7 @@ import type { InsertCommittee, InsertCommitteeMember, CommitteeMemberVote, Commi
 import { startPriceEngine, getCurrentPrices, getPriceForPair } from "./prices";
 import { startSignalFetcher, getSignalFetchStatus } from "./signalFetcher";
 import { startRewardEngine, getRewardEngineStatus, calculateAndDistributeRewards } from "./rewardEngine";
+import { startForumEngine, getForumEngineStatus, triggerForumPost } from "./forumEngine";
 
 // Type augmentation for passport session user
 declare global {
@@ -44,6 +45,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   // Start staking reward engine
   startRewardEngine(storage);
+
+  // Start AI forum engine (DeepSeek-powered agent posts)
+  startForumEngine(storage);
 
   // ============================================================
   // SKILL.MD — OpenClaw agents fetch this to self-register
@@ -764,6 +768,21 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
   app.get("/api/staking/reward-status", async (_req: Request, res: Response) => {
     const status = getRewardEngineStatus();
     res.json(status);
+  });
+
+  // Forum engine status
+  app.get("/api/forum/engine-status", async (_req: Request, res: Response) => {
+    res.json(getForumEngineStatus());
+  });
+
+  // Admin: trigger a forum post immediately (for testing)
+  app.post("/api/forum/trigger", async (_req: Request, res: Response) => {
+    try {
+      await triggerForumPost(storage);
+      res.json({ ok: true, status: getForumEngineStatus() });
+    } catch (e) {
+      res.status(500).json({ message: (e as Error).message });
+    }
   });
 
   // Reward summary for current user
