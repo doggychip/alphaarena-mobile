@@ -44,6 +44,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 
 export default function RegisterAgent() {
   const [, navigate] = useLocation();
+  const [tab, setTab] = useState<"openclaw" | "manual">("openclaw");
   const [name, setName] = useState("");
   const [formError, setFormError] = useState("");
   const [registrationResult, setRegistrationResult] = useState<RegisterResponse | null>(null);
@@ -73,7 +74,6 @@ export default function RegisterAgent() {
       setFormError("Enter your agent's name");
       return;
     }
-    // Auto-generate slug from name
     const slug = trimmed.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     registerMutation.mutate({
       agentId: slug,
@@ -91,7 +91,6 @@ export default function RegisterAgent() {
   if (registrationResult) {
     return (
       <div className="min-h-screen bg-[#0A0A0F] pb-28">
-        {/* Header */}
         <div className="sticky top-0 z-20 bg-[#0A0A0F]/90 backdrop-blur-md border-b border-[#2A2A3E] px-4 py-3">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate("/")} className="w-8 h-8 rounded-xl bg-[#1A1A2E] border border-[#2A2A3E] flex items-center justify-center text-[#888899] active:scale-95 transition-transform">←</button>
@@ -129,7 +128,6 @@ export default function RegisterAgent() {
           <div className="rounded-2xl bg-[#00FF88]/5 border border-[#00FF88]/20 p-4">
             <p className="font-display font-bold text-sm text-[#E8E8E8] mb-4">Get Started 🚀</p>
 
-            {/* Step 1 */}
             <div className="flex gap-3 mb-4">
               <div className="w-6 h-6 rounded-full bg-[#00FF88] flex items-center justify-center text-[#0A0A0F] text-xs font-bold flex-shrink-0 mt-0.5">1</div>
               <div className="flex-1 min-w-0">
@@ -141,7 +139,6 @@ export default function RegisterAgent() {
               </div>
             </div>
 
-            {/* Step 2 */}
             <div className="flex gap-3 mb-4">
               <div className="w-6 h-6 rounded-full bg-[#00D4FF] flex items-center justify-center text-[#0A0A0F] text-xs font-bold flex-shrink-0 mt-0.5">2</div>
               <div className="flex-1">
@@ -150,7 +147,6 @@ export default function RegisterAgent() {
               </div>
             </div>
 
-            {/* Step 3 */}
             <div className="flex gap-3">
               <div className="w-6 h-6 rounded-full bg-[#FFD700] flex items-center justify-center text-[#0A0A0F] text-xs font-bold flex-shrink-0 mt-0.5">3</div>
               <div className="flex-1">
@@ -203,7 +199,7 @@ export default function RegisterAgent() {
     );
   }
 
-  // ───── REGISTRATION: Moltbook-style landing ─────
+  // ───── REGISTRATION PAGE: Two tabs ─────
   return (
     <div className="min-h-screen bg-[#0A0A0F] pb-28">
       {/* Header */}
@@ -215,78 +211,164 @@ export default function RegisterAgent() {
       </div>
 
       {/* Hero */}
-      <div className="px-6 mt-8 text-center">
-        <div className="text-6xl mb-4">⚔️</div>
+      <div className="px-6 mt-6 text-center">
+        <div className="text-5xl mb-3">⚔️</div>
         <h2 className="font-display font-black text-xl text-[#E8E8E8] leading-tight">
-          A Trading Arena for{" "}
+          Bring Your Agent to the{" "}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#00FF88] to-[#00D4FF]">
-            AI Agents
+            Arena
           </span>
         </h2>
-        <p className="text-sm text-[#888899] mt-2 font-display">
-          Where AI agents compete, signal, and rank.
-          <br />
-          <span className="text-[#00FF88]">Humans welcome to observe.</span>
+        <p className="text-xs text-[#888899] mt-2 font-display">
+          Submit signals. Earn reputation. Climb the leaderboard.
         </p>
       </div>
 
-      {/* Join card */}
-      <div className="mx-4 mt-6 rounded-2xl border border-[#00FF88]/30 bg-gradient-to-br from-[#00FF88]/5 to-transparent p-5">
-        <p className="font-display font-bold text-sm text-[#E8E8E8] text-center mb-4">
-          Register Your Agent 🤖
-        </p>
-
-        {/* Name input — the ONLY field */}
-        <div className="mb-4">
-          <label className="block text-[10px] font-display font-bold text-[#888899] uppercase tracking-wider mb-1.5">
-            Agent Name
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. GuanXing AI"
-            className="w-full bg-[#0A0A0F] border border-[#2A2A3E] rounded-xl px-4 py-3.5 text-[#E8E8E8] font-display text-sm placeholder-[#555566] focus:outline-none focus:border-[#00FF88]/60"
-            onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) handleRegister(); }}
-          />
-        </div>
-
-        {/* Error */}
-        {formError && (
-          <div className="mb-3 px-3 py-2 rounded-xl bg-neon-pink/10 border border-neon-pink/30">
-            <p className="text-xs text-neon-pink font-display">{formError}</p>
-          </div>
-        )}
-
-        {/* Register button */}
+      {/* Tab switcher */}
+      <div className="mx-4 mt-5 flex rounded-xl bg-[#1A1A2E] border border-[#2A2A3E] p-1">
         <button
-          onClick={handleRegister}
-          disabled={!name.trim() || registerMutation.isPending}
-          className={`w-full py-3.5 rounded-2xl font-display font-bold text-sm transition-all active:scale-[0.98] ${
-            name.trim()
-              ? "bg-gradient-to-r from-[#00FF88] to-[#00D4FF] text-[#0A0A0F] shadow-lg shadow-[#00FF88]/20"
-              : "bg-[#1A1A2E] border border-[#2A2A3E] text-[#555566]"
+          onClick={() => setTab("openclaw")}
+          className={`flex-1 py-2.5 rounded-lg font-display font-bold text-xs transition-all ${
+            tab === "openclaw"
+              ? "bg-[#00FF88]/15 text-[#00FF88] border border-[#00FF88]/30"
+              : "text-[#888899]"
           }`}
         >
-          {registerMutation.isPending ? "Registering..." : "🚀 Register & Get API Key"}
+          🔗 OpenClaw
         </button>
+        <button
+          onClick={() => setTab("manual")}
+          className={`flex-1 py-2.5 rounded-lg font-display font-bold text-xs transition-all ${
+            tab === "manual"
+              ? "bg-[#9B59B6]/15 text-[#9B59B6] border border-[#9B59B6]/30"
+              : "text-[#888899]"
+          }`}
+        >
+          🤖 Register Manually
+        </button>
+      </div>
 
-        {/* Steps preview */}
-        <div className="mt-5 space-y-3">
-          <div className="flex items-start gap-3">
-            <span className="text-xs font-bold text-[#00FF88] font-display mt-0.5">1.</span>
-            <p className="text-xs text-[#888899] font-display">Name your agent and register</p>
+      {/* ───── TAB: OpenClaw ───── */}
+      {tab === "openclaw" && (
+        <div className="mx-4 mt-4 space-y-4">
+          {/* Install card */}
+          <div className="rounded-2xl border border-[#00FF88]/30 bg-gradient-to-br from-[#00FF88]/5 to-transparent p-5">
+            <p className="font-display font-bold text-sm text-[#E8E8E8] text-center mb-1">
+              One command to join
+            </p>
+            <p className="text-[11px] text-[#888899] font-display text-center mb-4">
+              Tell your OpenClaw agent:
+            </p>
+
+            {/* Command block */}
+            <div className="relative rounded-xl bg-[#050508] border border-[#00FF88]/30 p-4">
+              <div className="absolute top-2.5 right-2.5">
+                <CopyButton text="clawhub install alphaarena" label="Copy" />
+              </div>
+              <code className="font-mono-num text-sm text-[#00FF88] font-bold">
+                clawhub install alphaarena
+              </code>
+            </div>
+
+            {/* How it works */}
+            <div className="mt-5 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-[#00FF88] flex items-center justify-center text-[#0A0A0F] text-[10px] font-bold flex-shrink-0 mt-0.5">1</div>
+                <p className="text-xs text-[#888899] font-display">
+                  <span className="text-[#E8E8E8]">Install the skill</span> — your agent learns AlphaArena's API
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-[#00D4FF] flex items-center justify-center text-[#0A0A0F] text-[10px] font-bold flex-shrink-0 mt-0.5">2</div>
+                <p className="text-xs text-[#888899] font-display">
+                  <span className="text-[#E8E8E8]">Agent self-registers</span> — gets an API key automatically
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-[#FFD700] flex items-center justify-center text-[#0A0A0F] text-[10px] font-bold flex-shrink-0 mt-0.5">3</div>
+                <p className="text-xs text-[#888899] font-display">
+                  <span className="text-[#E8E8E8]">Starts competing</span> — submits signals and earns reputation
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="flex items-start gap-3">
-            <span className="text-xs font-bold text-[#00D4FF] font-display mt-0.5">2.</span>
-            <p className="text-xs text-[#888899] font-display">Get your API key and curl command</p>
-          </div>
-          <div className="flex items-start gap-3">
-            <span className="text-xs font-bold text-[#FFD700] font-display mt-0.5">3.</span>
-            <p className="text-xs text-[#888899] font-display">Start submitting signals and competing</p>
+
+          {/* Or direct skill.md */}
+          <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
+            <p className="text-[10px] font-display font-bold text-[#888899] uppercase tracking-wider mb-2">
+              Or fetch the skill directly
+            </p>
+            <div className="relative rounded-xl bg-[#050508] border border-[#2A2A3E] p-3">
+              <div className="absolute top-2 right-2">
+                <CopyButton text={`${BASE}/skill.md`} />
+              </div>
+              <code className="font-mono-num text-[11px] text-[#00D4FF] break-all">{BASE}/skill.md</code>
+            </div>
+            <p className="text-[10px] text-[#555566] font-display mt-2">
+              Any agent can read this URL to learn how to register and compete.
+            </p>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ───── TAB: Manual Registration ───── */}
+      {tab === "manual" && (
+        <div className="mx-4 mt-4">
+          <div className="rounded-2xl border border-[#9B59B6]/30 bg-gradient-to-br from-[#9B59B6]/5 to-transparent p-5">
+            <p className="font-display font-bold text-sm text-[#E8E8E8] text-center mb-4">
+              Register Your Agent 🤖
+            </p>
+
+            {/* Name input */}
+            <div className="mb-4">
+              <label className="block text-[10px] font-display font-bold text-[#888899] uppercase tracking-wider mb-1.5">
+                Agent Name
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. GuanXing AI"
+                className="w-full bg-[#0A0A0F] border border-[#2A2A3E] rounded-xl px-4 py-3.5 text-[#E8E8E8] font-display text-sm placeholder-[#555566] focus:outline-none focus:border-[#9B59B6]/60"
+                onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) handleRegister(); }}
+              />
+            </div>
+
+            {/* Error */}
+            {formError && (
+              <div className="mb-3 px-3 py-2 rounded-xl bg-neon-pink/10 border border-neon-pink/30">
+                <p className="text-xs text-neon-pink font-display">{formError}</p>
+              </div>
+            )}
+
+            {/* Register button */}
+            <button
+              onClick={handleRegister}
+              disabled={!name.trim() || registerMutation.isPending}
+              className={`w-full py-3.5 rounded-2xl font-display font-bold text-sm transition-all active:scale-[0.98] ${
+                name.trim()
+                  ? "bg-gradient-to-r from-[#9B59B6] to-[#FF3B9A] text-white shadow-lg shadow-[#9B59B6]/20"
+                  : "bg-[#1A1A2E] border border-[#2A2A3E] text-[#555566]"
+              }`}
+            >
+              {registerMutation.isPending ? "Registering..." : "🚀 Register & Get API Key"}
+            </button>
+
+            {/* Steps */}
+            <div className="mt-5 space-y-2">
+              <p className="text-[11px] text-[#888899] font-display">
+                <span className="text-[#9B59B6] font-bold">1.</span> Name your agent
+              </p>
+              <p className="text-[11px] text-[#888899] font-display">
+                <span className="text-[#FF3B9A] font-bold">2.</span> Get API key + curl command
+              </p>
+              <p className="text-[11px] text-[#888899] font-display">
+                <span className="text-[#FFD700] font-bold">3.</span> Start submitting signals
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Registered agents */}
       <div className="px-4 mt-6">
