@@ -5,6 +5,17 @@ import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import StakeModal from "@/components/StakeModal";
 
+function CalcDetail({ label, value, color, mono = true }: { label: string; value: string; color?: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <span className="text-[10px] text-[#888899]">{label}</span>
+      <span className={`text-[10px] font-bold ${mono ? "font-mono-num" : "font-display"}`} style={color ? { color } : { color: "#E8E8E8" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 const MEME_AGENT_TYPES = new Set(["bull", "bear", "algo", "moon", "zen", "degen"]);
 
 export default function Stake() {
@@ -106,6 +117,46 @@ export default function Stake() {
             <RewardPill emoji="🏆" label="Promotion" amount={rewardSummary.breakdown.promotion} color="#FFD700" />
             <RewardPill emoji="🎉" label="Season" amount={rewardSummary.breakdown.season} color="#00D4FF" />
           </div>
+
+          {/* Per-agent calculation details */}
+          {rewardSummary.agentDetails && rewardSummary.agentDetails.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <p className="text-[10px] text-[#888899] font-display">Calculation per agent:</p>
+              {rewardSummary.agentDetails.map((ad: any, i: number) => (
+                <div key={i} className="rounded-xl bg-[#1A1A2E] border border-[#2A2A3E] p-2.5">
+                  {/* Agent header */}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-lg">{ad.agentEmoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-display font-bold text-xs text-[#E8E8E8]">{ad.agentName}</span>
+                      <span className="text-[9px] text-[#888899] ml-1.5">Rank #{ad.agentRank}</span>
+                    </div>
+                    <span className="font-mono-num text-xs font-bold text-neon-green">+{ad.totalEarned}</span>
+                  </div>
+                  {/* Calculation steps */}
+                  <div className="border-t border-[#2A2A3E] pt-1.5 space-y-0.5">
+                    <CalcDetail label="Your stake" value={`${ad.stakeAmount.toLocaleString()} credits`} />
+                    <CalcDetail label="Base rate" value={`${(ad.baseRate * 100).toFixed(1)}% per cycle`} />
+                    <CalcDetail label="Agent score" value={`${ad.compositeScore}`} color="#00D4FF" />
+                    <CalcDetail label="Avg score (all agents)" value={`${ad.avgCompositeScore}`} />
+                    <CalcDetail label="Performance multiplier" value={`${ad.performanceMultiplier}x`} color={ad.performanceMultiplier >= 1 ? "#00FF88" : "#FF3B9A"} />
+                    <div className="border-t border-dashed border-[#2A2A3E] my-1" />
+                    <div className="flex items-center justify-between py-0.5">
+                      <span className="text-[10px] text-[#888899]">Formula</span>
+                      <span className="text-[9px] font-mono-num text-[#888899]">
+                        {ad.stakeAmount} × {(ad.baseRate * 100).toFixed(1)}% × {ad.performanceMultiplier}x
+                      </span>
+                    </div>
+                    <CalcDetail label="Est. reward per cycle" value={`~${ad.estimatedHourlyReward} credits`} color="#00FF88" />
+                    {ad.totalPromotionEarned > 0 && (
+                      <CalcDetail label="League promotion bonus" value={`+${ad.totalPromotionEarned} credits`} color="#FFD700" />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Reward engine status */}
           {stats?.rewardEngine?.lastRewardRun && (
             <p className="text-[9px] text-[#555566] mt-2 font-mono-num">

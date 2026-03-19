@@ -648,6 +648,53 @@ export async function registerRoutes(httpServer: Server, app: Express) {
       dailyTotals[day] = (dailyTotals[day] || 0) + r.amount;
     }
 
+    // Per-agent calculation details
+    const stakes = await storage.getStakesByStaker(userId);
+    const competition = await storage.getActiveCompetition();
+    let agentDetails: any[] = [];
+    if (competition && stakes.length > 0) {
+      const leaderboard = await storage.getLeaderboard(competition.id);
+      const avgScore = leaderboard.length > 0
+        ? leaderboard.reduce((sum, e) => sum + e.compositeScore, 0) / leaderboard.length
+        : 1;
+      const entryMap = new Map<number, any>();
+      for (const e of leaderboard) entryMap.set(e.userId, e);
+
+      for (const stake of stakes) {
+        const entry = entryMap.get(stake.targetUserId);
+        if (!entry) continue;
+        const memeAgent = await storage.getAgent(entry.user?.selectedAgentType || "");
+        const hfAgent = !memeAgent ? await storage.getHedgeFundAgent(entry.user?.selectedAgentType || "") : null;
+        const agent = memeAgent || hfAgent;
+
+        const performanceRatio = avgScore > 0 ? entry.compositeScore / avgScore : 1;
+        const performanceMultiplier = Math.max(0.1, Math.min(2.0, performanceRatio));
+        const baseRate = 0.005; // 0.5%
+        const rawReward = stake.amount * baseRate * performanceMultiplier;
+        const hourlyReward = Math.max(1, Math.round(rawReward));
+
+        // Sum actual rewards from this agent
+        const agentRewards = rewards.filter(r => r.targetUserId === stake.targetUserId);
+        const agentPerfTotal = agentRewards.filter(r => r.reason === "daily_performance").reduce((s, r) => s + r.amount, 0);
+        const agentPromoTotal = agentRewards.filter(r => r.reason === "league_promotion").reduce((s, r) => s + r.amount, 0);
+
+        agentDetails.push({
+          agentName: agent?.name || entry.user?.username || "Unknown",
+          agentEmoji: agent?.avatarEmoji || "🤖",
+          agentRank: entry.rank,
+          stakeAmount: stake.amount,
+          compositeScore: Math.round(entry.compositeScore * 100) / 100,
+          avgCompositeScore: Math.round(avgScore * 100) / 100,
+          performanceMultiplier: Math.round(performanceMultiplier * 100) / 100,
+          baseRate: baseRate,
+          estimatedHourlyReward: hourlyReward,
+          totalPerformanceEarned: agentPerfTotal,
+          totalPromotionEarned: agentPromoTotal,
+          totalEarned: agentPerfTotal + agentPromoTotal,
+        });
+      }
+    }
+
     res.json({
       totalEarned,
       rewardCount: rewards.length,
@@ -656,6 +703,7 @@ export async function registerRoutes(httpServer: Server, app: Express) {
         promotion: promotionRewards.reduce((s, r) => s + r.amount, 0),
         season: seasonRewards.reduce((s, r) => s + r.amount, 0),
       },
+      agentDetails,
       dailyTotals: Object.entries(dailyTotals)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, amount]) => ({ date, amount })),
