@@ -12,6 +12,11 @@
 import OpenAI from "openai";
 import type { IStorage } from "./storage";
 import { getCurrentPrices } from "./prices";
+import {
+  fetchTickerDeepDive, fetchMarketSnapshot, fetchFearGreed,
+  fetchGlobalCryptoData, fetchCoinDetails, fetchSecFilings,
+  fetchCryptoNews, type TickerDeepDive, type MarketSnapshot,
+} from "./marketDataService";
 
 // ── Config ──────────────────────────────────────────────────────────────
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
@@ -37,40 +42,85 @@ interface MarketContext {
   ticker: string;
   price: number;
   change24h: number;
-  // Enriched data from MCP-like sources
+  change7d: number;
+  change30d: number;
+  marketCap: number;
+  volume24h: number;
+  ath: number;
+  percentFromAth: number;
+  circulatingSupply: number;
+  maxSupply: number | null;
+  sparkline7d: number[];
+  // Enriched data from public APIs
   fearGreedIndex?: number;
+  fearGreedLabel?: string;
+  btcDominance?: number;
+  globalMcap?: number;
   trendingNews?: string[];
+  secFilings?: string[];
   technicalSummary?: string;
   fundamentalSummary?: string;
 }
 
 async function fetchMarketContext(ticker: string): Promise<MarketContext> {
-  const { prices } = getCurrentPrices();
-  const pair = `${ticker}/USD`;
-  const priceData = (prices || []).find((p: any) => p.pair === pair);
+  // Fetch deep dive from aggregated public APIs (CoinGecko + Coinpaprika + Fear&Greed + SEC EDGAR + News)
+  const deepDive = await fetchTickerDeepDive(ticker);
 
   const ctx: MarketContext = {
     ticker,
-    price: priceData?.price || 0,
-    change24h: priceData?.change24h || 0,
+    price: deepDive.price,
+    change24h: deepDive.change24h,
+    change7d: deepDive.change7d,
+    change30d: deepDive.change30d,
+    marketCap: deepDive.marketCap,
+    volume24h: deepDive.volume24h,
+    ath: deepDive.ath,
+    percentFromAth: deepDive.percentFromAth,
+    circulatingSupply: deepDive.circulatingSupply,
+    maxSupply: deepDive.maxSupply,
+    sparkline7d: deepDive.sparkline7d,
   };
 
-  // Attempt to enrich with news data (non-blocking)
-  try {
-    const newsRes = await fetch(
-      `https://min-api.cryptocompare.com/data/v2/news/?categories=${ticker}&excludeCategories=Sponsored`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (newsRes.ok) {
-      const newsData = await newsRes.json();
-      ctx.trendingNews = (newsData.Data || []).slice(0, 5).map((n: any) => n.title);
-    }
-  } catch { /* non-critical */ }
+  // Fear & Greed
+  if (deepDive.fearGreed) {
+    ctx.fearGreedIndex = deepDive.fearGreed.value;
+    ctx.fearGreedLabel = deepDive.fearGreed.classification;
+  }
 
-  // Technical summary from price action
+  // Global market
+  ctx.btcDominance = deepDive.btcDominance || undefined;
+  ctx.globalMcap = deepDive.globalMcap || undefined;
+
+  // News headlines
+  ctx.trendingNews = deepDive.news.slice(0, 5).map(n => n.title);
+
+  // SEC filings (equity)
+  if (deepDive.secFilings.length > 0) {
+    ctx.secFilings = deepDive.secFilings.map(f => `${f.form} (${f.filedDate}): ${f.company}`);
+  }
+
+  // Technical summary with richer data
   const direction = ctx.change24h >= 0 ? "upward" : "downward";
-  const magnitude = Math.abs(ctx.change24h);
-  ctx.technicalSummary = `${ticker} is trading at $${ctx.price < 1 ? ctx.price.toFixed(4) : ctx.price.toLocaleString()} with a ${magnitude.toFixed(2)}% ${direction} move in the last 24 hours.`;
+  const fmtPrice = ctx.price < 1 ? ctx.price.toFixed(4) : ctx.price.toLocaleString();
+  const fmtMcap = ctx.marketCap > 1e9 ? `$${(ctx.marketCap / 1e9).toFixed(1)}B` : `$${(ctx.marketCap / 1e6).toFixed(0)}M`;
+  const fmtVol = ctx.volume24h > 1e9 ? `$${(ctx.volume24h / 1e9).toFixed(1)}B` : `$${(ctx.volume24h / 1e6).toFixed(0)}M`;
+  const athPct = Math.abs(ctx.percentFromAth).toFixed(1);
+  ctx.technicalSummary = `${ticker} at $${fmtPrice} (${Math.abs(ctx.change24h).toFixed(2)}% ${direction} 24h, ${ctx.change7d >= 0 ? "+" : ""}${ctx.change7d.toFixed(1)}% 7d, ${ctx.change30d >= 0 ? "+" : ""}${ctx.change30d.toFixed(1)}% 30d). MCap: ${fmtMcap}, Vol: ${fmtVol}. ${athPct}% from ATH ($${ctx.ath < 1 ? ctx.ath.toFixed(4) : ctx.ath.toLocaleString()}).`;
+
+  // Fundamental summary
+  const supplyPct = ctx.maxSupply ? ((ctx.circulatingSupply / ctx.maxSupply) * 100).toFixed(1) : "N/A";
+  ctx.fundamentalSummary = `Circulating supply: ${(ctx.circulatingSupply / 1e6).toFixed(1)}M${ctx.maxSupply ? ` / ${(ctx.maxSupply / 1e6).toFixed(1)}M (${supplyPct}% minted)` : ""}. Market dominance context: BTC ${ctx.btcDominance?.toFixed(1) || "?"}%.`;
+
+  // Fallback to price engine if deep dive returned 0 price
+  if (ctx.price === 0) {
+    const { prices } = getCurrentPrices();
+    const pair = `${ticker}/USD`;
+    const priceData = (prices || []).find((p: any) => p.pair === pair);
+    if (priceData) {
+      ctx.price = priceData.price;
+      ctx.change24h = priceData.change24h;
+    }
+  }
 
   return ctx;
 }
@@ -298,12 +348,30 @@ async function generateAgentSignal(
     ? `\nRecent news:\n${marketCtx.trendingNews.map((n, i) => `${i + 1}. ${n}`).join("\n")}`
     : "";
 
+  const filingsBlock = marketCtx.secFilings?.length
+    ? `\nSEC Filings:\n${marketCtx.secFilings.map((f, i) => `${i + 1}. ${f}`).join("\n")}`
+    : "";
+
+  const fearGreedBlock = marketCtx.fearGreedIndex != null
+    ? `- Fear & Greed Index: ${marketCtx.fearGreedIndex}/100 (${marketCtx.fearGreedLabel})`
+    : "";
+
+  const fmtMcap = marketCtx.marketCap > 1e9 ? `$${(marketCtx.marketCap / 1e9).toFixed(1)}B` : `$${(marketCtx.marketCap / 1e6).toFixed(0)}M`;
+  const fmtVol = marketCtx.volume24h > 1e9 ? `$${(marketCtx.volume24h / 1e9).toFixed(1)}B` : `$${(marketCtx.volume24h / 1e6).toFixed(0)}M`;
+
   const prompt = `You are analyzing ${ticker} for a trading signal.
 
 MARKET DATA:
 - Current Price: $${marketCtx.price < 1 ? marketCtx.price.toFixed(4) : marketCtx.price.toLocaleString()}
 - 24h Change: ${marketCtx.change24h >= 0 ? "+" : ""}${marketCtx.change24h.toFixed(2)}%
-${marketCtx.technicalSummary ? `- Technical: ${marketCtx.technicalSummary}` : ""}${newsBlock}
+- 7d Change: ${marketCtx.change7d >= 0 ? "+" : ""}${marketCtx.change7d.toFixed(1)}%
+- 30d Change: ${marketCtx.change30d >= 0 ? "+" : ""}${marketCtx.change30d.toFixed(1)}%
+- Market Cap: ${fmtMcap}
+- 24h Volume: ${fmtVol}
+- ATH: $${marketCtx.ath < 1 ? marketCtx.ath.toFixed(4) : marketCtx.ath.toLocaleString()} (${Math.abs(marketCtx.percentFromAth).toFixed(1)}% away)
+${fearGreedBlock}
+${marketCtx.fundamentalSummary ? `- Fundamentals: ${marketCtx.fundamentalSummary}` : ""}
+${marketCtx.technicalSummary ? `- Technical: ${marketCtx.technicalSummary}` : ""}${newsBlock}${filingsBlock}
 
 ANALYSIS FRAMEWORK:
 ${profile.analysisFramework}
@@ -523,12 +591,26 @@ export async function generateThesis(request: ThesisRequest, marketCtx?: MarketC
     ? `Recent news:\n${ctx.trendingNews.map((n, i) => `${i + 1}. ${n}`).join("\n")}`
     : "";
 
+  const filingsBlock = ctx.secFilings?.length
+    ? `\nSEC Filings:\n${ctx.secFilings.map((f, i) => `${i + 1}. ${f}`).join("\n")}`
+    : "";
+
+  const fmtMcap = ctx.marketCap > 1e9 ? `$${(ctx.marketCap / 1e9).toFixed(1)}B` : `$${(ctx.marketCap / 1e6).toFixed(0)}M`;
+  const fmtVol = ctx.volume24h > 1e9 ? `$${(ctx.volume24h / 1e9).toFixed(1)}B` : `$${(ctx.volume24h / 1e6).toFixed(0)}M`;
+
   const prompt = `Build a ${request.direction.toUpperCase()} investment thesis for ${request.ticker}.
 
 MARKET DATA:
 - Price: $${ctx.price < 1 ? ctx.price.toFixed(4) : ctx.price.toLocaleString()}
 - 24h Change: ${ctx.change24h >= 0 ? "+" : ""}${ctx.change24h.toFixed(2)}%
-${newsBlock}
+- 7d Change: ${ctx.change7d >= 0 ? "+" : ""}${ctx.change7d.toFixed(1)}%
+- 30d Change: ${ctx.change30d >= 0 ? "+" : ""}${ctx.change30d.toFixed(1)}%
+- Market Cap: ${fmtMcap}
+- 24h Volume: ${fmtVol}
+- ATH: $${ctx.ath < 1 ? ctx.ath.toFixed(4) : ctx.ath.toLocaleString()} (${Math.abs(ctx.percentFromAth).toFixed(1)}% away)
+${ctx.fearGreedIndex != null ? `- Fear & Greed: ${ctx.fearGreedIndex}/100 (${ctx.fearGreedLabel})` : ""}
+${ctx.fundamentalSummary ? `- Supply: ${ctx.fundamentalSummary}` : ""}
+${newsBlock}${filingsBlock}
 
 Using the Anthropic Financial Services thesis tracker methodology, return JSON:
 {

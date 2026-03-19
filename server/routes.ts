@@ -14,6 +14,11 @@ import {
   runScreen, generateThesis, generateMorningNote,
   type ScreenRequest, type ThesisRequest
 } from "./analysisEngine";
+import {
+  fetchMarketSnapshot, fetchCoinDetails, fetchTickerDeepDive,
+  fetchFearGreed, fetchGlobalCryptoData, fetchFxRates,
+  fetchSecFilings, fetchCryptoNews, fetchTrending,
+} from "./marketDataService";
 
 // Type augmentation for passport session user
 declare global {
@@ -1925,6 +1930,106 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
       const result = await generateMorningNote(tickers);
       if (!result) return res.status(503).json({ message: "Analysis engine unavailable — DEEPSEEK_API_KEY required" });
       res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ============================================================
+  // MARKET DATA API — Public data from CoinGecko, Coinpaprika,
+  // Fear&Greed, SEC EDGAR, FX rates, etc.
+  // ============================================================
+
+  // Full market snapshot (all sources aggregated)
+  app.get("/api/market/snapshot", async (_req: Request, res: Response) => {
+    try {
+      const snapshot = await fetchMarketSnapshot();
+      res.json(snapshot);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Detailed coin data (CoinGecko markets)
+  app.get("/api/market/coins", async (_req: Request, res: Response) => {
+    try {
+      const coins = await fetchCoinDetails();
+      res.json({ coins, timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Deep dive on a specific ticker
+  app.get("/api/market/ticker/:ticker", async (req: Request, res: Response) => {
+    try {
+      const ticker = (req.params.ticker || "").toUpperCase();
+      if (!ticker) return res.status(400).json({ message: "ticker required" });
+      const data = await fetchTickerDeepDive(ticker);
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Fear & Greed Index
+  app.get("/api/market/fear-greed", async (_req: Request, res: Response) => {
+    try {
+      const data = await fetchFearGreed();
+      res.json(data || { value: null, classification: "unavailable" });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Global crypto stats
+  app.get("/api/market/global", async (_req: Request, res: Response) => {
+    try {
+      const data = await fetchGlobalCryptoData();
+      res.json(data || {});
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // FX rates (Frankfurter / ECB)
+  app.get("/api/market/fx", async (_req: Request, res: Response) => {
+    try {
+      const data = await fetchFxRates();
+      res.json(data || { rates: {} });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // SEC EDGAR filings
+  app.get("/api/market/sec/:ticker", async (req: Request, res: Response) => {
+    try {
+      const ticker = (req.params.ticker || "").toUpperCase();
+      if (!ticker) return res.status(400).json({ message: "ticker required" });
+      const filings = await fetchSecFilings(ticker);
+      res.json({ ticker, filings });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Crypto news (trending-based since CryptoCompare now requires auth)
+  app.get("/api/market/news", async (req: Request, res: Response) => {
+    try {
+      const ticker = req.query.ticker ? String(req.query.ticker).toUpperCase() : undefined;
+      const news = await fetchCryptoNews(ticker);
+      res.json({ news, timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // CoinGecko trending coins
+  app.get("/api/market/trending", async (_req: Request, res: Response) => {
+    try {
+      const trending = await fetchTrending();
+      res.json({ trending, timestamp: new Date().toISOString() });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }
