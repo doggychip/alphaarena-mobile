@@ -338,8 +338,15 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
   // Get current user (uses session user or fallback to demo)
   app.get("/api/me", async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const user = await storage.getUser(userId);
+    let user = await storage.getUser(userId);
     if (!user) return res.status(404).json({ message: "User not found" });
+    // Grant startup capital to users who have 0 credits (catches existing sessions)
+    if (user.credits === 0) {
+      const STARTUP_CAPITAL = 5000;
+      const updated = await storage.updateUser(userId, { credits: STARTUP_CAPITAL });
+      if (updated) user = updated;
+      console.log(`[StartupCapital] Granted ${STARTUP_CAPITAL} credits to user ${userId} (${user.username})`);
+    }
     const portfolio = await ensurePortfolio(userId);
     const leaderboardEntry = await storage.getLeaderboardEntry(userId);
     const memeAgent = await storage.getAgent(user.selectedAgentType);
