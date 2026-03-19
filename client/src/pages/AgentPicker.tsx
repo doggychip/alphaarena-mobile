@@ -36,11 +36,6 @@ export default function AgentPicker() {
   });
 
   const handleSelect = (agentType: string) => {
-    if (!user) {
-      toast({ title: "Login required", description: "Create an account to pick your agent", variant: "destructive" });
-      navigate("/auth");
-      return;
-    }
     if (agentType === currentAgentType) return;
     selectMutation.mutate(agentType);
   };

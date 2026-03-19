@@ -154,10 +154,16 @@ export async function registerRoutes(httpServer: Server, app: Express) {
     res.json({ user: safeUser, portfolio, leaderboardEntry, agent, agentTier, achievements: userAchievements });
   });
 
-  // Update user (e.g., switch agent) — requires auth
-  app.patch("/api/me", requireAuth, async (req: Request, res: Response) => {
+  // Update user (e.g., switch agent) — works for both auth'd and guest users
+  app.patch("/api/me", async (req: Request, res: Response) => {
     const userId = getUserId(req);
-    const updated = await storage.updateUser(userId, req.body);
+    // Whitelist safe fields only
+    const allowedFields: Record<string, any> = {};
+    if (req.body.selectedAgentType) allowedFields.selectedAgentType = req.body.selectedAgentType;
+    if (Object.keys(allowedFields).length === 0) {
+      return res.status(400).json({ message: "No valid fields to update" });
+    }
+    const updated = await storage.updateUser(userId, allowedFields);
     if (!updated) return res.status(404).json({ message: "User not found" });
     const { password: _pw, ...safeUser } = updated as any;
     res.json(safeUser);
