@@ -1045,6 +1045,20 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
   // MEME AGENT → HEDGE FUND MAPPING
   // ============================================================
 
+  // Batch: all meme → HF mappings in one call (for carousel)
+  app.get("/api/agents/all-mappings", async (_req: Request, res: Response) => {
+    const memeTypes = ["bull", "bear", "algo", "moon", "zen", "degen"];
+    const result: Record<string, any[]> = {};
+    for (const type of memeTypes) {
+      const mappings = await storage.getMemeAgentMapping(type);
+      result[type] = await Promise.all(mappings.map(async m => {
+        const hfAgent = await storage.getHedgeFundAgent(m.hedgeFundAgentId);
+        return { hedgeFundAgentId: m.hedgeFundAgentId, weight: m.weight, hfAgent };
+      }));
+    }
+    res.json(result);
+  });
+
   app.get("/api/agents/:type/hedge-fund", async (req: Request, res: Response) => {
     const mappings = await storage.getMemeAgentMapping(String(req.params.type));
     const enriched = await Promise.all(mappings.map(async m => {

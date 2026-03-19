@@ -63,10 +63,18 @@ interface AgentCarouselProps {
   user: any;
   allMemeAgents: any[];
   allHfAgents: any[];
-  hfMapping: any[];
+  allMappings: Record<string, any[]>; // memeType -> [{hedgeFundAgentId, weight, hfAgent}]
 }
 
-function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, user, allMemeAgents, allHfAgents, hfMapping }: AgentCarouselProps) {
+// Risk / category helpers
+const RISK_COLORS: Record<string, string> = { low: "text-neon-green", medium: "text-neon-gold", high: "text-neon-pink" };
+const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
+  persona: { label: "Legend", color: "text-neon-gold" },
+  specialist: { label: "Specialist", color: "text-neon-cyan" },
+  management: { label: "Manager", color: "text-[#9B59B6]" },
+};
+
+function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, user, allMemeAgents, allHfAgents, allMappings }: AgentCarouselProps) {
   // Build combined agent list: current agent first, then others
   const allAgents = useRef<{ agent: any; tier: "meme" | "hedge_fund" }[]>([]);
 
@@ -187,65 +195,99 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
               : "opacity-100 translate-x-0"
           }`}
         >
+          {/* ── Agent Header ── */}
           <div className="flex items-start gap-3">
             <div className="w-16 h-16 rounded-full bg-[#0A0A0F] border-2 border-neon-cyan/50 flex items-center justify-center text-3xl animate-bounce-gentle">
               {dAgent.avatarEmoji}
             </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-display font-bold text-[#E8E8E8]">{dAgent.name}</span>
                 <TierBadge tier={dTier} />
                 {isCurrentAgent && (
                   <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-green/15 text-neon-green border border-neon-green/30 font-display font-bold">ACTIVE</span>
                 )}
               </div>
-              {dIsHF ? (
-                <p className="text-[10px] text-[#888899] mt-1 line-clamp-2">{dAgent.tradingPhilosophy || dAgent.description}</p>
-              ) : (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">
-                  {dAgent.personality || dAgent.tradingStyle}
-                </span>
-              )}
+              {/* Unified sub-header: personality/category tags */}
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                {dIsHF ? (
+                  <>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full bg-[#0A0A0F] border border-[#2A2A3E] font-display font-bold ${CATEGORY_LABELS[dAgent.category]?.color || "text-[#888899]"}`}>
+                      {CATEGORY_LABELS[dAgent.category]?.label || dAgent.category}
+                    </span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full bg-[#0A0A0F] border border-[#2A2A3E] font-display font-bold ${RISK_COLORS[dAgent.riskTolerance] || "text-[#888899]"}`}>
+                      {(dAgent.riskTolerance || "medium").charAt(0).toUpperCase() + (dAgent.riskTolerance || "medium").slice(1)} Risk
+                    </span>
+                    {dAgent.assetFocus && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#0A0A0F] border border-[#2A2A3E] font-display text-[#888899]">
+                        {dAgent.assetFocus === "both" ? "Equity + Crypto" : dAgent.assetFocus === "equity" ? "Equity" : "Crypto"}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display">
+                    {dAgent.personality || dAgent.tradingStyle}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Speech Bubble — only for current agent */}
-          {isCurrentAgent && (
-            <div className="mt-3 relative bg-[#1E1E32] rounded-xl px-4 py-3 speech-bubble">
-              <p className="text-sm text-[#E8E8E8] leading-relaxed">
-                {agentMsg?.message || dAgent.description}
-              </p>
+          {/* ── Speech / Description Bubble ── */}
+          <div className={`mt-3 relative rounded-xl px-4 py-3 ${isCurrentAgent ? "bg-[#1E1E32] speech-bubble" : "bg-[#1E1E32]"}`}>
+            <p className={`leading-relaxed ${isCurrentAgent ? "text-sm text-[#E8E8E8]" : "text-xs text-[#888899] line-clamp-2"}`}>
+              {isCurrentAgent
+                ? (agentMsg?.message || dAgent.tradingPhilosophy || dAgent.description)
+                : (dAgent.tradingPhilosophy || dAgent.description)
+              }
+            </p>
+          </div>
+
+          {/* ── HF Stats Row (for hedge fund agents) ── */}
+          {dIsHF && (dAgent.winRate > 0 || dAgent.totalSignals > 0) && (
+            <div className="mt-2 flex items-center gap-3">
+              {dAgent.totalSignals > 0 && (
+                <span className="text-[10px] font-mono-num text-[#888899]">
+                  📊 {dAgent.totalSignals} signals
+                </span>
+              )}
+              {dAgent.winRate > 0 && (
+                <span className={`text-[10px] font-mono-num font-bold ${dAgent.winRate >= 50 ? "text-neon-green" : "text-neon-gold"}`}>
+                  🎯 {dAgent.winRate}% win
+                </span>
+              )}
+              {dAgent.avgConfidence > 0 && (
+                <span className="text-[10px] font-mono-num text-[#888899]">
+                  ⚡ {dAgent.avgConfidence}% avg conf
+                </span>
+              )}
             </div>
           )}
 
-          {/* Description for non-current agents */}
-          {!isCurrentAgent && (
-            <div className="mt-3 relative bg-[#1E1E32] rounded-xl px-4 py-3">
-              <p className="text-xs text-[#888899] leading-relaxed line-clamp-2">
-                {dAgent.description}
-              </p>
-            </div>
-          )}
-
-          {/* Powered By HF Agents — only for current meme agent */}
-          {isCurrentAgent && !isHF && hfMapping.length > 0 && (
-            <div className="mt-3 rounded-xl bg-[#12121A] border border-[#2A2A3E] p-2.5">
-              <p className="text-[10px] text-[#555566] font-display mb-1.5">⚡ Powered by</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                {hfMapping.map((m: any) => (
-                  <Link key={m.hedgeFundAgentId} href={`/signals/${m.hedgeFundAgentId}`}>
-                    <div
-                      className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#1A1A2E] border border-[#2A2A3E] cursor-pointer hover:border-neon-cyan/30 transition-colors"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <span className="text-sm">{m.hfAgent?.avatarEmoji}</span>
-                      <span className="text-[10px] font-display text-[#E8E8E8]">{m.hfAgent?.name}</span>
-                    </div>
-                  </Link>
-                ))}
+          {/* ── Powered By HF Agents (for meme agents — always visible) ── */}
+          {!dIsHF && (() => {
+            const memeType = dAgent.type; // bull, bear, algo, etc.
+            const mapping = allMappings[memeType] || [];
+            if (mapping.length === 0) return null;
+            return (
+              <div className="mt-2 rounded-xl bg-[#12121A] border border-[#2A2A3E] p-2.5">
+                <p className="text-[10px] text-[#555566] font-display mb-1.5">⚡ Powered by</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {mapping.map((m: any) => (
+                    <Link key={m.hedgeFundAgentId} href={`/signals/${m.hedgeFundAgentId}`}>
+                      <div
+                        className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#1A1A2E] border border-[#2A2A3E] cursor-pointer hover:border-neon-cyan/30 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="text-sm">{m.hfAgent?.avatarEmoji}</span>
+                        <span className="text-[10px] font-display text-[#E8E8E8]">{m.hfAgent?.name}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
 
         {/* Bottom row: PnL + Follow for current, or CTA for others */}
@@ -341,13 +383,9 @@ export default function Home() {
   const agentTier: "meme" | "hedge_fund" = meData?.agentTier || "meme";
   const isHF = agentTier === "hedge_fund";
 
-  const { data: hfMapping } = useQuery<any[]>({
-    queryKey: ["/api/agents", meData?.user?.selectedAgentType, "hedge-fund"],
-    queryFn: async () => {
-      const res = await fetch(`/api/agents/${meData?.user?.selectedAgentType}/hedge-fund`);
-      return res.json();
-    },
-    enabled: !!meData?.user?.selectedAgentType && !isHF,
+  // Fetch all meme → HF mappings in one batch call
+  const { data: allMappings } = useQuery<Record<string, any[]>>({
+    queryKey: ["/api/agents/all-mappings"],
   });
 
   // Auth for committees
@@ -470,7 +508,7 @@ export default function Home() {
           user={user}
           allMemeAgents={allMemeAgents || []}
           allHfAgents={allHfAgents || []}
-          hfMapping={(!isHF && hfMapping) ? hfMapping : []}
+          allMappings={allMappings || {}}
         />
       )}
 
