@@ -1,7 +1,7 @@
 import { Switch, Route, Router, useLocation, Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
@@ -91,9 +91,25 @@ function BottomNav() {
   );
 }
 
+// Hook to make guest state reactive across the app
+export function useGuestMode() {
+  const qc = useQueryClient();
+  const { data: isGuest = false } = useQuery({
+    queryKey: ["guest-mode"],
+    queryFn: () => localStorage.getItem("alphaarena_guest") === "true",
+    staleTime: Infinity,
+  });
+  const setGuest = (v: boolean) => {
+    if (v) localStorage.setItem("alphaarena_guest", "true");
+    else localStorage.removeItem("alphaarena_guest");
+    qc.setQueryData(["guest-mode"], v);
+  };
+  return { isGuest, setGuest };
+}
+
 function AppRouter() {
   const { user, isLoading } = useAuth();
-  const isGuest = localStorage.getItem("alphaarena_guest") === "true";
+  const { isGuest } = useGuestMode();
 
   if (isLoading) return <LoadingScreen />;
 

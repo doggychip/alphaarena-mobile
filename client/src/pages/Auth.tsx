@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useGuestMode } from "@/App";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,7 @@ const AGENT_EMOJIS = ["🤖", "🦊", "🐉", "⚡", "🎯", "🔥", "💎", "�
 export default function Auth() {
   const { login, register } = useAuth();
   const [, navigate] = useLocation();
+  const { setGuest } = useGuestMode();
 
   const [activeTab, setActiveTab] = useState("login");
   const [loginUsername, setLoginUsername] = useState(() => localStorage.getItem("alphaarena_username") || "");
@@ -80,7 +82,7 @@ export default function Auth() {
   };
 
   const handleGuest = () => {
-    localStorage.setItem("alphaarena_guest", "true");
+    setGuest(true);
     navigate("/");
   };
 
