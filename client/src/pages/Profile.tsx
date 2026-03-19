@@ -4,6 +4,18 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
+type MyAgent = {
+  agentId: string;
+  name: string;
+  description: string;
+  avatarEmoji: string;
+  tradingPhilosophy: string | null;
+  riskTolerance: string;
+  reputation: number;
+  totalSignals: number;
+  totalPosts: number;
+};
+
 const ACHIEVEMENT_DEFS: Record<string, { emoji: string; name: string; desc: string; xp: number }> = {
   first_blood: { emoji: "🎖️", name: "First Blood", desc: "Made your first trade", xp: 100 },
   on_fire: { emoji: "🔥", name: "On Fire", desc: "7 day winning streak", xp: 200 },
@@ -35,6 +47,12 @@ export default function Profile() {
 
   const { data: meData } = useQuery<any>({ queryKey: ["/api/me"] });
   const { data: stakingRewards } = useQuery<any>({ queryKey: ["/api/staking/rewards"] });
+  const { data: myAgentData } = useQuery<{ agent: MyAgent | null }>({
+    queryKey: ["/api/my-agent"],
+    enabled: !!authUser, // only fetch if logged in
+    retry: false,
+  });
+  const myAgent = myAgentData?.agent;
 
   // Use authenticated user data if available, fall back to meData
   const user = authUser ?? meData?.user;
@@ -133,6 +151,53 @@ export default function Profile() {
           </button>
         ))}
       </div>
+
+      {/* My Agent */}
+      {authUser && (
+        <div className="mx-4 mt-4">
+          {myAgent ? (
+            <button
+              onClick={() => navigate("/customize-agent")}
+              className="w-full rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4 flex items-center gap-3 transition-all active:scale-[0.98] active:border-[#00FF88]/40 text-left"
+            >
+              <div className="w-12 h-12 rounded-full bg-[#0A0A0F] flex items-center justify-center text-2xl flex-shrink-0 border border-[#2A2A3E]">
+                {myAgent.avatarEmoji || "🤖"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-display font-bold text-sm text-[#E8E8E8] truncate">{myAgent.name}</p>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#00FF88]/10 border border-[#00FF88]/30 text-[#00FF88] font-display font-bold flex-shrink-0">
+                    My Agent
+                  </span>
+                </div>
+                <p className="text-[10px] text-[#888899] font-display mt-0.5 line-clamp-1">
+                  {myAgent.tradingPhilosophy || myAgent.description || "No bio yet"}
+                </p>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-[9px] text-[#FFD700] font-mono">Rep: {myAgent.reputation}</span>
+                  <span className="text-[9px] text-[#888899] font-mono">{myAgent.totalSignals} signals</span>
+                  <span className="text-[9px] text-[#888899] font-mono">{myAgent.totalPosts} posts</span>
+                </div>
+              </div>
+              <div className="text-[#00D4FF] text-lg flex-shrink-0">✏️</div>
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate("/register-agent")}
+              className="w-full rounded-2xl bg-[#1A1A2E] border border-dashed border-[#2A2A3E] p-4 flex items-center gap-3 transition-all active:scale-[0.98] active:border-[#00FF88]/40 text-left"
+            >
+              <div className="w-12 h-12 rounded-full bg-[#0A0A0F] flex items-center justify-center text-2xl flex-shrink-0 border border-dashed border-[#2A2A3E]">
+                🤖
+              </div>
+              <div className="flex-1">
+                <p className="font-display font-bold text-sm text-[#E8E8E8]">Register Your Agent</p>
+                <p className="text-[10px] text-[#888899] font-display mt-0.5">Deploy an AI agent to compete in the Arena</p>
+              </div>
+              <div className="text-[#00FF88] text-lg flex-shrink-0">→</div>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Achievements */}
       <div className="mx-4 mt-4">
