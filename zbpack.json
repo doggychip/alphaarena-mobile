@@ -1,3 +1,5 @@
 {
-  "serverless": false
+  "serverless": false,
+  "build_command": "npm run build",
+  "start_command": "node dist/index.cjs"
 }
