@@ -1,12 +1,26 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import StakeModal from "@/components/StakeModal";
 
+const MEME_AGENT_TYPES = new Set(["bull", "bear", "algo", "moon", "zen", "degen"]);
+
 export default function Stake() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [stakeTarget, setStakeTarget] = useState<any>(null);
+
+  function goToAgent(user: any) {
+    if (!user) return;
+    const agentType = user.selectedAgentType;
+    if (agentType && !MEME_AGENT_TYPES.has(agentType)) {
+      navigate(`/signals/${agentType}`);
+    } else {
+      navigate(`/agent?userId=${user.id}`);
+    }
+  }
 
   const { data: meData } = useQuery<any>({ queryKey: ["/api/me"], refetchInterval: 15000 });
   const { data: myStakes } = useQuery<any>({ queryKey: ["/api/staking/my-stakes"] });
@@ -96,7 +110,8 @@ export default function Stake() {
                 <div
                   key={s.targetUserId}
                   data-testid={`my-stake-${s.targetUserId}`}
-                  className={`flex-shrink-0 w-[160px] rounded-2xl p-3 border transition-all ${
+                  onClick={() => goToAgent(s.targetUser)}
+                  className={`flex-shrink-0 w-[160px] rounded-2xl p-3 border transition-all cursor-pointer active:scale-[0.97] ${
                     profitable ? "bg-[#1A1A2E] border-neon-gold/30" : "bg-[#1A1A2E] border-[#2A2A3E]"
                   }`}
                 >
@@ -137,7 +152,8 @@ export default function Stake() {
               <div
                 key={entry.targetUserId}
                 data-testid={`hot-agent-${entry.targetUserId}`}
-                className={`rounded-2xl bg-[#1A1A2E] border p-3 flex items-center gap-3 ${
+                onClick={() => goToAgent(entry.user)}
+                className={`rounded-2xl bg-[#1A1A2E] border p-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform ${
                   isHeavilyStaked ? "border-neon-gold/40" : "border-[#2A2A3E]"
                 }`}
               >
@@ -161,7 +177,7 @@ export default function Stake() {
                   </span>
                   <button
                     data-testid={`btn-stake-${entry.targetUserId}`}
-                    onClick={() => setStakeTarget(entry)}
+                    onClick={(e) => { e.stopPropagation(); setStakeTarget(entry); }}
                     className="px-3 py-1.5 rounded-xl bg-neon-green/10 border border-neon-green/40 text-neon-green font-display font-bold text-[10px] active:scale-95 transition-transform min-h-[32px]"
                   >
                     Stake

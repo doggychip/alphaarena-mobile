@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useLocation } from "wouter";
 
 const LEAGUE_CONFIG = [
   { id: "diamond", label: "🏆 Diamond", color: "#00D4FF", maxRank: 10 },
@@ -22,6 +23,17 @@ function getLeague(rank: number) {
 
 export default function Arena() {
   const [selectedLeague, setSelectedLeague] = useState("all");
+  const [, navigate] = useLocation();
+
+  function goToAgent(user: any) {
+    if (!user) return;
+    const agentType = user.selectedAgentType;
+    if (agentType && !MEME_AGENT_TYPES.has(agentType)) {
+      navigate(`/signals/${agentType}`);
+    } else {
+      navigate(`/agent?userId=${user.id}`);
+    }
+  }
 
   const { data: meData } = useQuery<any>({ queryKey: ["/api/me"] });
   const { data: leaderboardData } = useQuery<any>({ queryKey: ["/api/leaderboard"] });
@@ -142,7 +154,8 @@ export default function Arena() {
             <div
               key={entry.userId}
               data-testid={`leaderboard-entry-${entry.userId}`}
-              className={`rounded-2xl bg-[#1A1A2E] border p-3 flex items-center gap-3 card-tap ${
+              onClick={() => goToAgent(entry.user)}
+              className={`rounded-2xl bg-[#1A1A2E] border p-3 flex items-center gap-3 card-tap cursor-pointer active:scale-[0.98] transition-transform ${
                 isMe ? "border-neon-green/50 glow-green" : isHeavilyStaked ? "border-neon-gold/40" : "border-[#2A2A3E]"
               }`}
             >
