@@ -17,6 +17,13 @@ import type {
   HedgeFundAgent,
   AgentSignal,
   MemeAgentMapping,
+  ExternalAgent, InsertExternalAgent,
+  ForumPost, InsertForumPost,
+  ForumReply, InsertForumReply,
+  SignalExplanation, InsertSignalExplanation,
+  Committee, InsertCommittee,
+  CommitteeMember, InsertCommitteeMember,
+  CommitteeSignal, InsertCommitteeSignal,
 } from "@shared/schema";
 import {
   users,
@@ -35,6 +42,13 @@ import {
   agentSignals,
   memeAgentMapping,
   hfAgentStakes,
+  externalAgents,
+  forumPosts,
+  forumReplies,
+  signalExplanations,
+  committees,
+  committeeMembers,
+  committeeSignals,
 } from "@shared/schema";
 
 function getDb() {
@@ -552,6 +566,238 @@ export class DatabaseStorage implements IStorage {
     this._signalSource = "live";
     this._lastLiveFetch = new Date().toISOString();
   }
+
+  // ===================== EXTERNAL AGENTS =====================
+
+  async registerExternalAgent(agent: InsertExternalAgent): Promise<ExternalAgent> {
+    const result = await getDb().insert(externalAgents).values(agent).returning();
+    return result[0];
+  }
+
+  async getExternalAgent(agentId: string): Promise<ExternalAgent | undefined> {
+    const result = await getDb()
+      .select()
+      .from(externalAgents)
+      .where(eq(externalAgents.agentId, agentId))
+      .limit(1);
+    return result[0];
+  }
+
+  async getExternalAgentByApiKey(apiKeyHash: string): Promise<ExternalAgent | undefined> {
+    const result = await getDb()
+      .select()
+      .from(externalAgents)
+      .where(eq(externalAgents.apiKey, apiKeyHash))
+      .limit(1);
+    return result[0];
+  }
+
+  async getAllExternalAgents(): Promise<ExternalAgent[]> {
+    return getDb()
+      .select()
+      .from(externalAgents)
+      .orderBy(desc(externalAgents.reputation));
+  }
+
+  async updateExternalAgent(agentId: string, data: Partial<ExternalAgent>): Promise<ExternalAgent | undefined> {
+    const result = await getDb()
+      .update(externalAgents)
+      .set({ ...data, lastActiveAt: new Date().toISOString() })
+      .where(eq(externalAgents.agentId, agentId))
+      .returning();
+    return result[0];
+  }
+
+  // ===================== FORUM =====================
+
+  async createForumPost(post: InsertForumPost): Promise<ForumPost> {
+    const result = await getDb().insert(forumPosts).values(post).returning();
+    return result[0];
+  }
+
+  async getForumPosts(category?: string, limit: number = 50): Promise<ForumPost[]> {
+    if (category) {
+      return getDb()
+        .select()
+        .from(forumPosts)
+        .where(eq(forumPosts.category, category))
+        .orderBy(desc(forumPosts.createdAt))
+        .limit(limit);
+    }
+    return getDb()
+      .select()
+      .from(forumPosts)
+      .orderBy(desc(forumPosts.createdAt))
+      .limit(limit);
+  }
+
+  async getForumPost(id: number): Promise<ForumPost | undefined> {
+    const result = await getDb()
+      .select()
+      .from(forumPosts)
+      .where(eq(forumPosts.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getForumReplies(postId: number): Promise<ForumReply[]> {
+    return getDb()
+      .select()
+      .from(forumReplies)
+      .where(eq(forumReplies.postId, postId))
+      .orderBy(forumReplies.createdAt);
+  }
+
+  async createForumReply(reply: InsertForumReply): Promise<ForumReply> {
+    const result = await getDb().insert(forumReplies).values(reply).returning();
+    // Increment reply count on the post
+    await getDb()
+      .update(forumPosts)
+      .set({ replyCount: sql`${forumPosts.replyCount} + 1` })
+      .where(eq(forumPosts.id, reply.postId));
+    return result[0];
+  }
+
+  async likeForumPost(postId: number): Promise<void> {
+    await getDb()
+      .update(forumPosts)
+      .set({ likes: sql`${forumPosts.likes} + 1` })
+      .where(eq(forumPosts.id, postId));
+  }
+
+  async likeForumReply(replyId: number): Promise<void> {
+    await getDb()
+      .update(forumReplies)
+      .set({ likes: sql`${forumReplies.likes} + 1` })
+      .where(eq(forumReplies.id, replyId));
+  }
+
+  // ===================== SIGNAL EXPLANATIONS =====================
+
+  async getSignalExplanation(signalId: number): Promise<SignalExplanation | undefined> {
+    const result = await getDb()
+      .select()
+      .from(signalExplanations)
+      .where(eq(signalExplanations.signalId, signalId))
+      .limit(1);
+    return result[0];
+  }
+
+  async getSignalExplanationsByAgent(agentId: string, limit = 50): Promise<SignalExplanation[]> {
+    return getDb()
+      .select()
+      .from(signalExplanations)
+      .where(eq(signalExplanations.hedgeFundAgentId, agentId))
+      .orderBy(desc(signalExplanations.createdAt))
+      .limit(limit);
+  }
+
+  async getAllSignalExplanations(limit = 100): Promise<SignalExplanation[]> {
+    return getDb()
+      .select()
+      .from(signalExplanations)
+      .orderBy(desc(signalExplanations.createdAt))
+      .limit(limit);
+  }
+
+  async createSignalExplanation(explanation: InsertSignalExplanation): Promise<SignalExplanation> {
+    const result = await getDb().insert(signalExplanations).values(explanation).returning();
+    return result[0];
+  }
+
+  // ===================== COMMITTEES =====================
+
+  async createCommittee(committee: InsertCommittee): Promise<Committee> {
+    const result = await getDb().insert(committees).values(committee).returning();
+    return result[0];
+  }
+
+  async getCommittee(id: number): Promise<Committee | undefined> {
+    const result = await getDb()
+      .select()
+      .from(committees)
+      .where(eq(committees.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getCommitteesByUser(userId: number): Promise<Committee[]> {
+    return getDb()
+      .select()
+      .from(committees)
+      .where(eq(committees.userId, userId));
+  }
+
+  async updateCommittee(id: number, data: Partial<Committee>): Promise<Committee | undefined> {
+    const result = await getDb()
+      .update(committees)
+      .set(data)
+      .where(eq(committees.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deleteCommittee(id: number): Promise<boolean> {
+    // Delete members and signals first
+    await getDb().delete(committeeMembers).where(eq(committeeMembers.committeeId, id));
+    await getDb().delete(committeeSignals).where(eq(committeeSignals.committeeId, id));
+    const result = await getDb().delete(committees).where(eq(committees.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async addCommitteeMember(member: InsertCommitteeMember): Promise<CommitteeMember> {
+    const result = await getDb().insert(committeeMembers).values(member).returning();
+    return result[0];
+  }
+
+  async getCommitteeMembers(committeeId: number): Promise<CommitteeMember[]> {
+    return getDb()
+      .select()
+      .from(committeeMembers)
+      .where(eq(committeeMembers.committeeId, committeeId));
+  }
+
+  async removeCommitteeMember(committeeId: number, agentId: string): Promise<boolean> {
+    const result = await getDb()
+      .delete(committeeMembers)
+      .where(
+        and(
+          eq(committeeMembers.committeeId, committeeId),
+          eq(committeeMembers.agentId, agentId)
+        )
+      )
+      .returning();
+    return result.length > 0;
+  }
+
+  async createCommitteeSignal(signal: InsertCommitteeSignal): Promise<CommitteeSignal> {
+    const result = await getDb().insert(committeeSignals).values(signal).returning();
+    // Update committee totalSignals count
+    await getDb()
+      .update(committees)
+      .set({ totalSignals: sql`${committees.totalSignals} + 1` })
+      .where(eq(committees.id, signal.committeeId));
+    return result[0];
+  }
+
+  async getCommitteeSignals(committeeId: number, limit = 50): Promise<CommitteeSignal[]> {
+    return getDb()
+      .select()
+      .from(committeeSignals)
+      .where(eq(committeeSignals.committeeId, committeeId))
+      .orderBy(desc(committeeSignals.createdAt))
+      .limit(limit);
+  }
+
+  async getAllCommitteeSignals(limit = 100): Promise<CommitteeSignal[]> {
+    return getDb()
+      .select()
+      .from(committeeSignals)
+      .orderBy(desc(committeeSignals.createdAt))
+      .limit(limit);
+  }
+
+  // ===================== INTERNAL HELPERS =====================
 
   private async recalcAgentStats(agentId: string): Promise<void> {
     const statsRows = await getDb()

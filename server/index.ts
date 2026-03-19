@@ -67,6 +67,34 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Auto-migrate + seed PostgreSQL if DATABASE_URL is set
+  if (pool) {
+    try {
+      const { migrate } = await import("drizzle-orm/node-postgres/migrator");
+      const { db } = await import("./db");
+      if (db) {
+        // Push schema (creates/alters tables to match schema.ts)
+        const { sql: rawSql } = await import("drizzle-orm");
+        console.log("[DB] PostgreSQL connected — pushing schema...");
+        // Use drizzle-kit push via child process for schema sync
+        const { execSync } = await import("child_process");
+        try {
+          execSync("npx drizzle-kit push --force", { stdio: "inherit", timeout: 30000 });
+          console.log("[DB] Schema push complete");
+        } catch (e) {
+          console.warn("[DB] Schema push failed (tables may already exist):", (e as Error).message);
+        }
+        // Seed if empty
+        const { seedIfEmpty } = await import("./seed");
+        await seedIfEmpty();
+      }
+    } catch (e) {
+      console.error("[DB] Migration/seed error:", e);
+    }
+  } else {
+    console.log("[DB] No DATABASE_URL — using in-memory storage");
+  }
+
   // Session store — use Postgres if available, else memory
   let sessionStore: any;
   if (pool) {
