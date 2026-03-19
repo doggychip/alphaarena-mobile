@@ -62,9 +62,10 @@ interface AgentCarouselProps {
   user: any;
   allMemeAgents: any[];
   allHfAgents: any[];
+  hfMapping: any[];
 }
 
-function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, user, allMemeAgents, allHfAgents }: AgentCarouselProps) {
+function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, user, allMemeAgents, allHfAgents, hfMapping }: AgentCarouselProps) {
   // Build combined agent list: current agent first, then others
   const allAgents = useRef<{ agent: any; tier: "meme" | "hedge_fund" }[]>([]);
 
@@ -175,6 +176,26 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
               <p className="text-xs text-[#888899] leading-relaxed line-clamp-2">
                 {dAgent.description}
               </p>
+            </div>
+          )}
+
+          {/* Powered By HF Agents — only for current meme agent */}
+          {isCurrentAgent && !isHF && hfMapping.length > 0 && (
+            <div className="mt-3 rounded-xl bg-[#12121A] border border-[#2A2A3E] p-2.5">
+              <p className="text-[10px] text-[#555566] font-display mb-1.5">⚡ Powered by</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                {hfMapping.map((m: any) => (
+                  <Link key={m.hedgeFundAgentId} href={`/signals/${m.hedgeFundAgentId}`}>
+                    <div
+                      className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#1A1A2E] border border-[#2A2A3E] cursor-pointer hover:border-neon-cyan/30 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span className="text-sm">{m.hfAgent?.avatarEmoji}</span>
+                      <span className="text-[10px] font-display text-[#E8E8E8]">{m.hfAgent?.name}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -386,24 +407,8 @@ export default function Home() {
           user={user}
           allMemeAgents={allMemeAgents || []}
           allHfAgents={allHfAgents || []}
+          hfMapping={(!isHF && hfMapping) ? hfMapping : []}
         />
-      )}
-
-      {/* Powered By HF Agents — Only show for Meme agents */}
-      {!isHF && hfMapping && hfMapping.length > 0 && (
-        <div className="mx-4 mt-3 rounded-2xl bg-[#12121A] border border-[#2A2A3E] p-3">
-          <p className="text-[10px] text-[#555566] font-display mb-2">⚡ Powered by</p>
-          <div className="flex items-center gap-2 flex-wrap">
-            {hfMapping.map((m: any) => (
-              <Link key={m.hedgeFundAgentId} href={`/signals/${m.hedgeFundAgentId}`}>
-                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-[#1A1A2E] border border-[#2A2A3E] cursor-pointer hover:border-neon-cyan/30 transition-colors">
-                  <span className="text-sm">{m.hfAgent?.avatarEmoji}</span>
-                  <span className="text-[10px] font-display text-[#E8E8E8]">{m.hfAgent?.name}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
       )}
 
       {/* Quick Actions */}
