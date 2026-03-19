@@ -1046,12 +1046,16 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
   // ============================================================
 
   // Register a new external agent — returns API key (shown once)
+  // Optionally links to the logged-in user so they can manage the agent from their profile
   app.post("/api/agents/register", async (req: Request, res: Response) => {
     try {
       const { agentId, name, description, avatarEmoji, webhookUrl, source, tradingPhilosophy, riskTolerance } = req.body;
       if (!agentId || !name || !description) {
         return res.status(400).json({ message: "agentId, name, and description are required" });
       }
+
+      // Capture logged-in user's ID if authenticated (for "My Agent" linkage)
+      const ownerUserId = (req.isAuthenticated && req.isAuthenticated()) ? ((req as any).user?.id ?? null) : null;
 
       // Check uniqueness
       const existing = await storage.getExternalAgent(agentId);
@@ -1097,6 +1101,7 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
         tradingPhilosophy: tradingPhilosophy || null,
         riskTolerance: riskTolerance || "medium",
         userId: npcUser.id,
+        ownerUserId,
         totalSignals: 0,
         totalPosts: 0,
         reputation: 0,

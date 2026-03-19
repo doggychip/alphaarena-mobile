@@ -1851,7 +1851,9 @@ export class MemStorage implements IStorage {
   }
 
   async getExternalAgentByUserId(userId: number): Promise<ExternalAgent | undefined> {
-    return Array.from(this.externalAgentsMap.values()).find(a => a.userId === userId);
+    return Array.from(this.externalAgentsMap.values()).find(
+      a => a.userId === userId || a.ownerUserId === userId
+    );
   }
 
   async getAllExternalAgents(): Promise<ExternalAgent[]> {

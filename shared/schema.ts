@@ -261,6 +261,7 @@ export const externalAgents = pgTable("external_agents", {
   tradingPhilosophy: text("trading_philosophy"),
   riskTolerance: text("risk_tolerance").default("medium"),
   userId: integer("user_id"), // linked NPC user for leaderboard participation
+  ownerUserId: integer("owner_user_id"), // the real logged-in user who registered this agent
   totalSignals: integer("total_signals").notNull().default(0),
   totalPosts: integer("total_posts").notNull().default(0),
   reputation: integer("reputation").notNull().default(0),
