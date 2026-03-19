@@ -702,6 +702,60 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     res.json(enriched);
   });
 
+  // All leaderboard agents enriched with staking data — for the Stake page discovery
+  app.get("/api/staking/all-agents", async (req: Request, res: Response) => {
+    const currentUserId = getUserId(req);
+    const competition = await storage.getActiveCompetition();
+    if (!competition) return res.json([]);
+
+    const leaderboard = await storage.getLeaderboard(competition.id);
+    if (leaderboard.length === 0) return res.json([]);
+
+    const avgScore = leaderboard.reduce((sum, e) => sum + e.compositeScore, 0) / leaderboard.length;
+
+    const enriched = await Promise.all(leaderboard.map(async entry => {
+      const user = entry.user || await storage.getUser(entry.userId);
+      if (!user) return null;
+      const memeAgent = await storage.getAgent(user.selectedAgentType);
+      const hfAgent = !memeAgent ? await storage.getHedgeFundAgent(user.selectedAgentType) : undefined;
+      const agent = memeAgent || hfAgent;
+      const totalStaked = await storage.getTotalStakedOnUser(entry.userId);
+      const stakesOnTarget = await storage.getStakesByTarget(entry.userId);
+      const myStake = await storage.getStake(currentUserId, entry.userId);
+
+      // Compute estimated reward per cycle for 100 credits staked
+      const perfRatio = avgScore > 0 ? entry.compositeScore / avgScore : 1;
+      const perfMultiplier = Math.max(0.1, Math.min(2.0, perfRatio));
+      const estRewardPer100 = Math.round(100 * 0.005 * perfMultiplier);
+
+      // Compute actual estimated reward based on user's current stake
+      const myStakeAmount = myStake?.amount || 0;
+      const estMyReward = myStakeAmount > 0 ? Math.max(1, Math.round(myStakeAmount * 0.005 * perfMultiplier)) : 0;
+
+      return {
+        userId: entry.userId,
+        username: user.username,
+        agentName: agent?.name || user.username,
+        agentEmoji: (agent as any)?.avatarEmoji || "🤖",
+        agentType: user.selectedAgentType,
+        rank: entry.rank,
+        totalReturn: entry.totalReturn,
+        compositeScore: Math.round(entry.compositeScore * 100) / 100,
+        sharpeRatio: Math.round(entry.sharpeRatio * 100) / 100,
+        winRate: entry.winRate,
+        totalStaked,
+        stakerCount: new Set(stakesOnTarget.map(s => s.stakerId)).size,
+        myStakeAmount,
+        estRewardPer100,
+        estMyReward,
+        perfMultiplier: Math.round(perfMultiplier * 100) / 100,
+        league: entry.rank <= 10 ? "diamond" : entry.rank <= 50 ? "gold" : entry.rank <= 100 ? "silver" : "bronze",
+      };
+    }));
+
+    res.json(enriched.filter(Boolean));
+  });
+
   app.get("/api/staking/agent/:userId", async (req: Request, res: Response) => {
     const targetUserId = parseInt(String(req.params.userId));
     const currentUserId = getUserId(req);
