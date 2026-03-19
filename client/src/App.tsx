@@ -21,6 +21,7 @@ import CommitteeBuilder from "@/pages/CommitteeBuilder";
 import CommitteeDashboard from "@/pages/CommitteeDashboard";
 import RegisterAgent from "@/pages/RegisterAgent";
 import CustomizeAgent from "@/pages/CustomizeAgent";
+import ResearchTools from "@/pages/ResearchTools";
 import NotFound from "@/pages/not-found";
 
 function LoadingScreen() {
@@ -138,6 +139,7 @@ function AppRouter() {
               <Route path="/committee/:id" component={CommitteeDashboard} />
               <Route path="/register-agent" component={RegisterAgent} />
               <Route path="/customize-agent" component={CustomizeAgent} />
+              <Route path="/research" component={ResearchTools} />
               <Route path="/stake" component={Stake} />
               <Route path="/profile" component={Profile} />
               <Route path="/how-to-play" component={HowToPlay} />

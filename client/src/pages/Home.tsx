@@ -537,6 +537,20 @@ export default function Home() {
         </div>
       </Link>
 
+      {/* Research Tools Entry */}
+      <Link href="/research">
+        <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-[#00FF88]/10 to-[#00D4FF]/10 border border-[#00FF88]/30 p-4 active:scale-[0.98] transition-transform cursor-pointer">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#00FF88]/15 flex items-center justify-center text-xl">🧪</div>
+            <div className="flex-1">
+              <p className="text-xs font-display font-bold text-[#E8E8E8]">Research Tools</p>
+              <p className="text-[10px] text-[#888899] mt-0.5">AI screener, thesis builder & morning notes — powered by Anthropic</p>
+            </div>
+            <span className="text-[#00FF88] text-sm">→</span>
+          </div>
+        </div>
+      </Link>
+
       {/* Register Agent Entry */}
       <Link href="/register-agent">
         <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-[#FF3B9A]/10 to-[#9B59B6]/10 border border-[#FF3B9A]/30 p-4 active:scale-[0.98] transition-transform cursor-pointer">

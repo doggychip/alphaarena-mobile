@@ -9,6 +9,11 @@ import { startPriceEngine, getCurrentPrices, getPriceForPair } from "./prices";
 import { startSignalFetcher, getSignalFetchStatus } from "./signalFetcher";
 import { startRewardEngine, getRewardEngineStatus, calculateAndDistributeRewards } from "./rewardEngine";
 import { startForumEngine, getForumEngineStatus, triggerForumPost } from "./forumEngine";
+import {
+  startAnalysisEngine, getAnalysisEngineStatus,
+  runScreen, generateThesis, generateMorningNote,
+  type ScreenRequest, type ThesisRequest
+} from "./analysisEngine";
 
 // Type augmentation for passport session user
 declare global {
@@ -74,6 +79,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   // Start AI forum engine (DeepSeek-powered agent posts)
   startForumEngine(storage);
+
+  // Start LLM-powered analysis engine (Anthropic Financial Plugins integration)
+  startAnalysisEngine(storage);
 
   // ============================================================
   // SKILL.MD — OpenClaw agents fetch this to self-register
@@ -1873,5 +1881,52 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
       },
       recentSignals,
     });
+  });
+
+  // ============================================================
+  // RESEARCH TOOLS — Powered by Anthropic Financial Plugins + DeepSeek
+  // ============================================================
+
+  // Analysis engine status
+  app.get("/api/research/status", (_req: Request, res: Response) => {
+    res.json(getAnalysisEngineStatus());
+  });
+
+  // Stock/crypto screener
+  app.post("/api/research/screen", async (req: Request, res: Response) => {
+    try {
+      const { direction = "both", style = "growth", assetClass = "crypto", theme } = req.body;
+      const results = await runScreen({ direction, style, assetClass, theme } as ScreenRequest);
+      res.json({ results, generatedAt: new Date().toISOString() });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Investment thesis builder
+  app.post("/api/research/thesis", async (req: Request, res: Response) => {
+    try {
+      const { ticker, direction = "long" } = req.body;
+      if (!ticker) return res.status(400).json({ message: "ticker is required" });
+      const result = await generateThesis({ ticker: ticker.toUpperCase(), direction } as ThesisRequest);
+      if (!result) return res.status(503).json({ message: "Analysis engine unavailable — DEEPSEEK_API_KEY required" });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Morning note
+  app.get("/api/research/morning-note", async (req: Request, res: Response) => {
+    try {
+      const tickers = req.query.tickers
+        ? String(req.query.tickers).split(",").map(t => t.trim().toUpperCase())
+        : undefined;
+      const result = await generateMorningNote(tickers);
+      if (!result) return res.status(503).json({ message: "Analysis engine unavailable — DEEPSEEK_API_KEY required" });
+      res.json(result);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 }
