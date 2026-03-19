@@ -187,6 +187,15 @@ export default function Profile() {
         <p className="text-xs text-[#888899] font-display mb-3">⚙️ Settings</p>
         <div className="space-y-3">
           <div className="flex items-center justify-between py-2">
+            <span className="text-sm text-[#E8E8E8]">📖 How to Play</span>
+            <button
+              onClick={() => navigate("/how-to-play")}
+              className="text-xs text-neon-cyan bg-neon-cyan/10 border border-neon-cyan/20 hover:bg-neon-cyan/20 px-3 py-1 rounded-full transition-colors font-display font-semibold"
+            >
+              Read Guide
+            </button>
+          </div>
+          <div className="flex items-center justify-between py-2 border-t border-[#2A2A3E]">
             <span className="text-sm text-[#E8E8E8]">🌙 Theme</span>
             <span className="text-xs text-[#888899] bg-[#2A2A3E] px-3 py-1 rounded-full">Dark Only 😎</span>
           </div>

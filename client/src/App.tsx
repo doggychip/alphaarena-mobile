@@ -13,6 +13,7 @@ import HFAgentDetail from "@/pages/HFAgentDetail";
 import Stake from "@/pages/Stake";
 import Profile from "@/pages/Profile";
 import Auth from "@/pages/Auth";
+import HowToPlay from "@/pages/HowToPlay";
 import NotFound from "@/pages/not-found";
 
 function LoadingScreen() {
@@ -110,6 +111,7 @@ function AppRouter() {
               <Route path="/signals/:agentId" component={HFAgentDetail} />
               <Route path="/stake" component={Stake} />
               <Route path="/profile" component={Profile} />
+              <Route path="/how-to-play" component={HowToPlay} />
               <Route component={NotFound} />
             </>
           )}

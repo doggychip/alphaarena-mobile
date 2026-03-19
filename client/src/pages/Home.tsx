@@ -128,6 +128,9 @@ export default function Home() {
           <span className="font-display font-bold text-lg text-[#E8E8E8]">Alpha<span className="text-neon-green">Arena</span></span>
         </div>
         <div className="flex items-center gap-3">
+          <Link href="/how-to-play">
+            <button data-testid="btn-how-to-play" className="w-10 h-10 flex items-center justify-center rounded-full bg-[#1A1A2E] text-lg" aria-label="How to Play">📖</button>
+          </Link>
           <button data-testid="btn-notifications" className="w-10 h-10 flex items-center justify-center rounded-full bg-[#1A1A2E] text-lg">🔔</button>
           <div className="w-9 h-9 rounded-full bg-neon-green/20 border-2 border-neon-green flex items-center justify-center text-sm font-bold text-neon-green">
             {user?.username?.[0] || "D"}

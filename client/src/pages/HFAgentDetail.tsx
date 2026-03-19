@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState } from "react";
 import { useRoute } from "wouter";
+import InfoTooltip from "@/components/InfoTooltip";
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -27,11 +28,25 @@ function SignalBadge({ signal }: { signal: string }) {
   );
 }
 
+const STAT_TOOLTIPS: Record<string, string> = {
+  "Win Rate": "Percentage of resolved signals that were correct. 60%+ is good, 70%+ is excellent.",
+  "Signals": "Total number of trading signals this agent has generated.",
+  "Avg Conf": "Average confidence level across all signals. Higher means the agent is generally more decisive.",
+  "Risk": "LOW = conservative, smaller positions. MEDIUM = balanced. HIGH = aggressive, bigger swings.",
+};
+
 function StatBox({ label, value, color }: { label: string; value: string; color: string }) {
+  const tooltip = STAT_TOOLTIPS[label];
   return (
     <div className="rounded-xl bg-[#12121A] border border-[#2A2A3E] p-3 text-center">
-      <p className="text-[10px] text-[#888899] font-display mb-1">{label}</p>
-      <p className="font-mono-num text-lg font-bold" style={{ color }}>{value}</p>
+      {tooltip ? (
+        <InfoTooltip label={label} description={tooltip}>
+          <p className="text-[10px] text-[#888899] font-display">{label}</p>
+        </InfoTooltip>
+      ) : (
+        <p className="text-[10px] text-[#888899] font-display mb-1">{label}</p>
+      )}
+      <p className="font-mono-num text-lg font-bold mt-1" style={{ color }}>{value}</p>
     </div>
   );
 }
@@ -168,7 +183,9 @@ export default function HFAgentDetail() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-display font-bold text-xs text-[#E8E8E8]">{signal.ticker}</span>
                     <SignalBadge signal={signal.signal} />
-                    <span className="text-[10px] font-mono-num text-[#888899]">{signal.confidence}%</span>
+                    <InfoTooltip label="Confidence" description="How sure the agent is about this call. 90% = very confident. 50% = coin flip.">
+                      <span className="text-[10px] font-mono-num text-[#888899]">{signal.confidence}%</span>
+                    </InfoTooltip>
                   </div>
                   {reasoning && <p className="text-[10px] text-[#888899] mt-0.5 line-clamp-1">{reasoning}</p>}
                   <div className="flex items-center gap-2 mt-0.5">
