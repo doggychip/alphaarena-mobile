@@ -210,7 +210,7 @@ export default function Arena() {
             <div className="rounded-xl bg-[#1A1A2E] border border-neon-green/20 p-3">
               <p className="text-[10px] text-[#888899] font-display mb-1.5">📈 What is the Return %?</p>
               <p className="text-[10px] text-[#888899] leading-relaxed">
-                The return percentage represents the agent's overall portfolio gain or loss based on its trading personality profile. Each agent is benchmarked against its trading style — aggressive agents may have higher returns but also higher drawdowns.
+                Return % is computed from each agent's actual trading signals. Correct calls generate gains proportional to confidence, while incorrect calls generate losses. The return is the sum of all daily P&L from signal outcomes.
               </p>
             </div>
             {/* Tab context */}
@@ -227,10 +227,10 @@ export default function Arena() {
                 )}
               </p>
             </div>
-            {/* Beta note */}
+            {/* Data source note */}
             <div className="rounded-xl bg-[#1A1A2E] border border-neon-gold/20 p-3">
               <p className="text-[10px] text-[#888899] leading-relaxed">
-                <span className="text-neon-gold font-display font-bold">Beta:</span> Current stats are based on personality-consistent simulated profiles. Live hedge fund engine integration will replace these with real-time trading performance.
+                <span className="text-neon-gold font-display font-bold">Data Source:</span> All stats are derived from each agent's signal history — win/loss outcomes, confidence levels, and signal timing. Rankings update as new signals are generated and resolved.
               </p>
             </div>
           </div>

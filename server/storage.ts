@@ -229,47 +229,101 @@ function generateSeedData() {
     });
   }
 
-  // Personality-consistent leaderboard stats for each agent
-  const agentPerformance: Record<string, { totalReturn: number; sharpe: number; maxDrawdown: number; winRate: number }> = {
-    // Top performers
-    "cathie_wood":             { totalReturn: 35,  sharpe: 1.5, maxDrawdown: 18, winRate: 55 },
-    "stanley_druckenmiller":   { totalReturn: 28,  sharpe: 2.5, maxDrawdown: 8,  winRate: 65 },
-    "peter_lynch":             { totalReturn: 22,  sharpe: 2.2, maxDrawdown: 7,  winRate: 70 },
-    "moon":                    { totalReturn: 40,  sharpe: 1.0, maxDrawdown: 22, winRate: 45 },
-    "technical_analyst":       { totalReturn: 18,  sharpe: 2.8, maxDrawdown: 5,  winRate: 72 },
-    // Mid-pack
-    "warren_buffett":          { totalReturn: 12,  sharpe: 2.5, maxDrawdown: 4,  winRate: 75 },
-    "charlie_munger":          { totalReturn: 11,  sharpe: 2.4, maxDrawdown: 4,  winRate: 73 },
-    "ben_graham":              { totalReturn: 8,   sharpe: 2.7, maxDrawdown: 3,  winRate: 78 },
-    "zen":                     { totalReturn: 10,  sharpe: 2.3, maxDrawdown: 5,  winRate: 68 },
-    "algo":                    { totalReturn: 15,  sharpe: 2.6, maxDrawdown: 6,  winRate: 70 },
-    "mohnish_pabrai":          { totalReturn: 14,  sharpe: 2.0, maxDrawdown: 7,  winRate: 65 },
-    "fundamentals_analyst":    { totalReturn: 13,  sharpe: 2.1, maxDrawdown: 6,  winRate: 67 },
-    "valuation_analyst":       { totalReturn: 9,   sharpe: 2.5, maxDrawdown: 4,  winRate: 72 },
-    "aswath_damodaran":        { totalReturn: 10,  sharpe: 2.3, maxDrawdown: 5,  winRate: 70 },
-    "phil_fisher":             { totalReturn: 11,  sharpe: 2.0, maxDrawdown: 6,  winRate: 66 },
-    "sentiment_analyst":       { totalReturn: 12,  sharpe: 1.9, maxDrawdown: 8,  winRate: 62 },
-    "news_sentiment_analyst":  { totalReturn: 10,  sharpe: 1.7, maxDrawdown: 9,  winRate: 60 },
-    "growth_agent":            { totalReturn: 16,  sharpe: 1.8, maxDrawdown: 10, winRate: 60 },
-    "risk_manager":            { totalReturn: 7,   sharpe: 3.0, maxDrawdown: 2,  winRate: 74 },
-    // Lower pack
-    "michael_burry":           { totalReturn: -5,  sharpe: 0.5, maxDrawdown: 15, winRate: 40 },
-    "bull":                    { totalReturn: 25,  sharpe: 1.5, maxDrawdown: 14, winRate: 50 },
-    "bear":                    { totalReturn: -2,  sharpe: 0.8, maxDrawdown: 10, winRate: 45 },
-    "degen":                   { totalReturn: 30,  sharpe: 0.7, maxDrawdown: 25, winRate: 35 },
-    "bill_ackman":             { totalReturn: 5,   sharpe: 1.2, maxDrawdown: 12, winRate: 50 },
-    "rakesh_jhunjhunwala":     { totalReturn: 20,  sharpe: 1.8, maxDrawdown: 11, winRate: 60 },
-  };
+  // === COMPUTE AGENT PERFORMANCE FROM SIGNAL DATA ===
+  // Instead of hardcoded profiles, derive stats from the actual signals each agent generated.
+  // Each resolved signal contributes to a simulated daily P&L series, from which we calculate
+  // totalReturn, Sharpe ratio, max drawdown, and win rate.
+  function computeAgentPerformance(
+    agentId: string,
+    signals: AgentSignal[]
+  ): { totalReturn: number; sharpe: number; maxDrawdown: number; winRate: number } {
+    const agentSignals = signals.filter(s => s.hedgeFundAgentId === agentId);
+    if (agentSignals.length === 0) {
+      return { totalReturn: 0, sharpe: 0, maxDrawdown: 0, winRate: 50 };
+    }
+
+    // Win rate from resolved signals
+    const resolved = agentSignals.filter(s => s.isCorrect !== null);
+    const wins = resolved.filter(s => s.isCorrect === true).length;
+    const winRate = resolved.length > 0 ? Math.round((wins / resolved.length) * 100) : 50;
+
+    // Simulate daily P&L from signals
+    // Sort by createdAt to process chronologically
+    const sorted = [...agentSignals].sort((a, b) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    // Group signals by day
+    const dailyPnl: number[] = [];
+    const dayMap = new Map<string, number[]>();
+    for (const sig of sorted) {
+      const day = sig.createdAt.split("T")[0];
+      if (!dayMap.has(day)) dayMap.set(day, []);
+      // Each signal generates a P&L based on confidence-weighted position sizing
+      // Correct bullish/bearish → gain proportional to confidence
+      // Incorrect → loss proportional to confidence
+      // Neutral → small P&L either way
+      const confWeight = sig.confidence / 100; // 0.4-0.95
+      const positionSize = confWeight * 2; // position size as % of portfolio (0.8-1.9%)
+      let pnl: number;
+      if (sig.isCorrect === true) {
+        // Correct call → gain 1-4% of position
+        pnl = positionSize * (1 + Math.random() * 3);
+      } else if (sig.isCorrect === false) {
+        // Wrong call → lose 0.5-3% of position
+        pnl = -positionSize * (0.5 + Math.random() * 2.5);
+      } else {
+        // Unresolved → small random movement
+        pnl = positionSize * (Math.random() - 0.5) * 0.5;
+      }
+      dayMap.get(day)!.push(pnl);
+    }
+
+    // Sum daily P&L
+    for (const [, pnls] of [...dayMap.entries()].sort()) {
+      dailyPnl.push(pnls.reduce((sum, p) => sum + p, 0));
+    }
+
+    // If we have fewer than 2 days, pad with 0
+    while (dailyPnl.length < 2) dailyPnl.push(0);
+
+    // Total return = sum of daily returns
+    const totalReturn = Math.round(dailyPnl.reduce((sum, d) => sum + d, 0) * 100) / 100;
+
+    // Sharpe ratio = mean(daily) / std(daily) * sqrt(N)
+    // Use actual number of trading days for annualization (avoids inflated ratios from short history)
+    const mean = dailyPnl.reduce((s, d) => s + d, 0) / dailyPnl.length;
+    const variance = dailyPnl.reduce((s, d) => s + (d - mean) ** 2, 0) / dailyPnl.length;
+    const std = Math.sqrt(variance);
+    const annFactor = Math.sqrt(Math.min(dailyPnl.length, 30)); // scale by actual days, cap at 30
+    const sharpe = std > 0 ? Math.round((mean / std) * annFactor * 100) / 100 : 0;
+
+    // Max drawdown from cumulative equity curve
+    let peak = 0;
+    let cumulative = 0;
+    let maxDd = 0;
+    for (const d of dailyPnl) {
+      cumulative += d;
+      if (cumulative > peak) peak = cumulative;
+      const dd = peak - cumulative;
+      if (dd > maxDd) maxDd = dd;
+    }
+    const maxDrawdown = Math.round(Math.max(0, maxDd) * 100) / 100;
+
+    return { totalReturn, sharpe: Math.max(-5, Math.min(5, sharpe)), maxDrawdown, winRate };
+  }
+
+  // agentPerformance is computed after signal generation — see below
+  let agentPerformance: Record<string, { totalReturn: number; sharpe: number; maxDrawdown: number; winRate: number }> = {};
 
   // Leaderboard entries for all users, sorted by compositeScore
+  // Stats are now computed from actual signal data — no artificial jitter needed
   const leaderboardUnsorted: Omit<LeaderboardEntry, "rank">[] = users.map(u => {
     const perf = agentPerformance[u.selectedAgentType];
-    // Add slight randomness so it's not perfectly deterministic
-    const jitter = () => Math.round((Math.random() - 0.5) * 200) / 100; // +-1
-    const totalReturn = perf ? Math.round((perf.totalReturn + jitter()) * 100) / 100 : Math.round((Math.random() - 0.3) * 20 * 100) / 100;
-    const sharpe = perf ? Math.round((perf.sharpe + jitter() * 0.1) * 100) / 100 : Math.round(Math.random() * 2 * 100) / 100;
-    const maxDrawdown = perf ? Math.round(Math.max(0, perf.maxDrawdown + jitter()) * 100) / 100 : Math.round(Math.random() * 15 * 100) / 100;
-    const winRate = perf ? Math.round((perf.winRate + jitter()) * 100) / 100 : Math.round((45 + Math.random() * 30) * 100) / 100;
+    const totalReturn = perf ? perf.totalReturn : 0;
+    const sharpe = perf ? perf.sharpe : 0;
+    const maxDrawdown = perf ? perf.maxDrawdown : 0;
+    const winRate = perf ? perf.winRate : 50;
     const compositeScore = Math.round((totalReturn * 0.4 + sharpe * 10 + (100 - maxDrawdown) * 0.1 + winRate * 0.2) * 100) / 100;
     return {
       id: u.id, competitionId: 1, userId: u.id,
@@ -1000,6 +1054,62 @@ function generateSeedData() {
     hfAgent.totalSignals = totalCount;
     hfAgent.avgConfidence = totalCount > 0 ? Math.round(totalConf / totalCount) : 0;
   }
+
+  // === COMPUTE AGENT PERFORMANCE FROM SIGNAL DATA ===
+  // Now that signals are generated, compute performance metrics for all agents
+  const allAgentIds = new Set<string>();
+  hedgeFundAgentsSeed.forEach(a => allAgentIds.add(a.agentId));
+  users.filter(u => u.id >= 2).forEach(u => allAgentIds.add(u.selectedAgentType));
+
+  for (const agentId of allAgentIds) {
+    agentPerformance[agentId] = computeAgentPerformance(agentId, signalsSeed);
+  }
+
+  // Meme agents don't have direct signals — compute from their mapped HF agents
+  const memeTypes = ["bull", "bear", "algo", "moon", "zen", "degen"];
+  for (const memeType of memeTypes) {
+    const mappings = memeAgentMappingSeed.filter(m => m.memeAgentType === memeType);
+    if (mappings.length > 0 && (!agentPerformance[memeType] || agentPerformance[memeType].totalReturn === 0)) {
+      let wReturn = 0, wSharpe = 0, wDd = 0, wWin = 0, totalW = 0;
+      for (const m of mappings) {
+        const perf = agentPerformance[m.hedgeFundAgentId];
+        if (perf) {
+          wReturn += perf.totalReturn * m.weight;
+          wSharpe += perf.sharpe * m.weight;
+          wDd += perf.maxDrawdown * m.weight;
+          wWin += perf.winRate * m.weight;
+          totalW += m.weight;
+        }
+      }
+      if (totalW > 0) {
+        agentPerformance[memeType] = {
+          totalReturn: Math.round((wReturn / totalW) * 100) / 100,
+          sharpe: Math.round((wSharpe / totalW) * 100) / 100,
+          maxDrawdown: Math.round((wDd / totalW) * 100) / 100,
+          winRate: Math.round(wWin / totalW),
+        };
+      }
+    }
+  }
+
+  // Rebuild leaderboard now that we have signal-derived performance data
+  for (const entry of leaderboard) {
+    const user = users.find(u => u.id === entry.userId);
+    if (!user) continue;
+    const perf = agentPerformance[user.selectedAgentType];
+    if (perf) {
+      entry.totalReturn = perf.totalReturn;
+      entry.sharpeRatio = perf.sharpe;
+      entry.maxDrawdown = perf.maxDrawdown;
+      entry.winRate = perf.winRate;
+      entry.compositeScore = Math.round(
+        (perf.totalReturn * 0.4 + perf.sharpe * 10 + (100 - perf.maxDrawdown) * 0.1 + perf.winRate * 0.2) * 100
+      ) / 100;
+    }
+  }
+  // Re-sort and re-rank
+  leaderboard.sort((a, b) => b.compositeScore - a.compositeScore);
+  leaderboard.forEach((entry, i) => { entry.rank = i + 1; });
 
   return { agents, users, competition, portfolios, positions, trades, snapshots, leaderboard, userAchievements, agentMessagesData, achievementDefs, stakesData, rewardsData, hedgeFundAgentsSeed, memeAgentMappingSeed, signalsSeed };
 }

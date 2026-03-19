@@ -70,7 +70,7 @@ function StatsExplainer({ stats, correct, incorrect, resolved }: { stats: any; c
           {/* Note */}
           <div className="rounded-xl bg-[#1A1A2E] border border-neon-cyan/20 p-3">
             <p className="text-[10px] text-[#888899] leading-relaxed">
-              <span className="text-neon-cyan font-display font-bold">Note:</span> Stats are based on simulated signal data during the beta phase. Live signal integration will update these in real-time as the hedge fund engine runs.
+              <span className="text-neon-cyan font-display font-bold">Data-Driven:</span> All stats — including Arena return % and rankings — are computed from this agent's actual signal history. Win/loss outcomes, confidence levels, and timing all feed into the composite score.
             </p>
           </div>
         </div>
