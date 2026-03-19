@@ -46,28 +46,37 @@ function getUserId(req: Request): number {
   return (req as any).user?.id ?? 1;
 }
 
+// Auto-incrementing portfolio ID counter (starts above seed range)
+let nextPortfolioId = 100;
+
 // Auto-create portfolio for users who don't have one yet (e.g. newly registered)
 async function ensurePortfolio(userId: number) {
   let portfolio = await storage.getPortfolio(userId);
   if (!portfolio) {
     // Create a default portfolio with $100k starting balance
+    const portfolioId = nextPortfolioId++;
     const newPortfolio = {
-      id: Date.now(),
       userId,
       competitionId: 1,
       cashBalance: 100000,
       totalEquity: 100000,
     };
-    // Store it directly — MemStorage uses a Map keyed by userId
-    (storage as any).portfolios?.set(userId, newPortfolio);
-    // For DatabaseStorage, try upserting
+    // For DatabaseStorage, insert and let serial auto-generate ID
     if ((storage as any).db) {
       try {
         const { portfolios: portfolioTable } = await import("@shared/schema");
-        await (storage as any).db.insert(portfolioTable).values(newPortfolio).onConflictDoNothing();
-      } catch (e) { /* ignore */ }
+        const [inserted] = await (storage as any).db.insert(portfolioTable).values(newPortfolio).returning();
+        portfolio = inserted;
+      } catch (e) {
+        // Fallback: store with generated ID
+        portfolio = { id: portfolioId, ...newPortfolio };
+        (storage as any).portfolios?.set(userId, portfolio);
+      }
+    } else {
+      // MemStorage: store with generated ID
+      portfolio = { id: portfolioId, ...newPortfolio };
+      (storage as any).portfolios?.set(userId, portfolio);
     }
-    portfolio = newPortfolio;
   }
   return portfolio;
 }
