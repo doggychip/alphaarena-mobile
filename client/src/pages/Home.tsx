@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "wouter";
@@ -74,7 +74,7 @@ const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   management: { label: "Manager", color: "text-[#9B59B6]" },
 };
 
-function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, user, allMemeAgents, allHfAgents, allMappings }: AgentCarouselProps) {
+function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, user, allMemeAgents, allHfAgents, allMappings, onSwitchAgent }: AgentCarouselProps & { onSwitchAgent: (agentType: string) => void }) {
   // Build combined agent list: current agent first, then others
   const allAgents = useRef<{ agent: any; tier: "meme" | "hedge_fund" }[]>([]);
 
@@ -197,9 +197,23 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
         >
           {/* ── Agent Header ── */}
           <div className="flex items-start gap-3">
-            <div className="w-16 h-16 rounded-full bg-[#0A0A0F] border-2 border-neon-cyan/50 flex items-center justify-center text-3xl animate-bounce-gentle">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const agentType = dIsHF ? dAgent.agentId : (dAgent.type || dAgent.id?.toString());
+                if (agentType) {
+                  onSwitchAgent(agentType);
+                  window.location.hash = "#/agent";
+                }
+              }}
+              className="w-16 h-16 rounded-full bg-[#0A0A0F] border-2 border-neon-cyan/50 flex items-center justify-center text-3xl animate-bounce-gentle active:scale-90 transition-transform relative group"
+              title="Chat with this agent"
+            >
               {dAgent.avatarEmoji}
-            </div>
+              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-neon-cyan/20 border border-neon-cyan/40 flex items-center justify-center">
+                <span className="text-[8px]">💬</span>
+              </div>
+            </button>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-display font-bold text-[#E8E8E8]">{dAgent.name}</span>
@@ -290,57 +304,33 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
           })()}
         </div>
 
-        {/* Bottom row: PnL + Follow for current, or CTA for others */}
+        {/* Bottom row: PnL + View Signals */}
         {isCurrentAgent ? (
           <div className="mt-3 flex items-center justify-between">
             <span className={`font-mono-num text-lg font-bold ${displayPnl >= 0 ? "text-neon-green text-glow-green" : "text-neon-pink text-glow-pink"}`}>
               {displayPnl >= 0 ? "+" : "-"}${Math.abs(displayPnl).toLocaleString(undefined, { maximumFractionDigits: 0 })} today {displayPnl >= 0 ? "\ud83d\udd25" : "\ud83d\udcc9"}
             </span>
-            {isHF ? (
-              <Link href={`/signals/${user?.selectedAgentType}`}>
-                <button
-                  data-testid="btn-follow-agent"
-                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  View Signals
-                </button>
-              </Link>
-            ) : (
-              <Link href="/agent">
-                <button
-                  data-testid="btn-follow-agent"
-                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  View Signals
-                </button>
-              </Link>
-            )}
+            <Link href={isHF ? `/signals/${user?.selectedAgentType}` : `/signals`}>
+              <button
+                data-testid="btn-follow-agent"
+                className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
+                onClick={(e) => e.stopPropagation()}
+              >
+                View Signals
+              </button>
+            </Link>
           </div>
         ) : (
           <div className="mt-3 flex items-center justify-end">
-            {dIsHF ? (
-              <Link href={`/signals/${dAgent.agentId}`}>
-                <button
-                  data-testid="btn-view-signals-other"
-                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  View Signals
-                </button>
-              </Link>
-            ) : (
-              <Link href="/agent">
-                <button
-                  data-testid="btn-view-signals-other"
-                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  View Signals
-                </button>
-              </Link>
-            )}
+            <Link href={dIsHF ? `/signals/${dAgent.agentId}` : `/signals`}>
+              <button
+                data-testid="btn-view-signals-other"
+                className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
+                onClick={(e) => e.stopPropagation()}
+              >
+                View Signals
+              </button>
+            </Link>
           </div>
         )}
 
@@ -375,6 +365,19 @@ export default function Home() {
   const [tradeMode, setTradeMode] = useState<"buy" | "sell">("buy");
   const [showNotifications, setShowNotifications] = useState(false);
   const unreadCount = useUnreadCount();
+  const queryClient = useQueryClient();
+
+  // Switch agent for chat — PATCH /api/me with new selectedAgentType
+  const handleSwitchAgent = useCallback(async (agentType: string) => {
+    try {
+      await apiRequest("PATCH", "/api/me", { selectedAgentType: agentType });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/agent/messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/agent/message"] });
+    } catch (err) {
+      console.error("Failed to switch agent:", err);
+    }
+  }, [queryClient]);
 
   const { data: meData } = useQuery<any>({
     queryKey: ["/api/me"],
@@ -529,6 +532,7 @@ export default function Home() {
           allMemeAgents={allMemeAgents || []}
           allHfAgents={allHfAgents || []}
           allMappings={allMappings || {}}
+          onSwitchAgent={handleSwitchAgent}
         />
       )}
 
