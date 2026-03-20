@@ -426,6 +426,41 @@ export type CommitteeConsensus = {
   createdAt: string;
 };
 
+// Committee Debates — multi-round AI agent discussions (adapted from HeartAI group-chat)
+export const committeeDebates = pgTable("committee_debates", {
+  id: serial("id").primaryKey(),
+  committeeId: integer("committee_id").notNull(),
+  ticker: text("ticker").notNull(),
+  status: text("status").notNull().default("active"), // active | concluded
+  rounds: integer("rounds").notNull().default(0),
+  verdictSignal: text("verdict_signal"), // bullish | bearish | neutral (set on conclusion)
+  verdictConfidence: real("verdict_confidence"),
+  verdictSummary: text("verdict_summary"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertCommitteeDebateSchema = createInsertSchema(committeeDebates).omit({ id: true });
+export type InsertCommitteeDebate = z.infer<typeof insertCommitteeDebateSchema>;
+export type CommitteeDebate = typeof committeeDebates.$inferSelect;
+
+// Committee Debate Messages — individual agent arguments within a debate
+export const committeeDebateMessages = pgTable("committee_debate_messages", {
+  id: serial("id").primaryKey(),
+  debateId: integer("debate_id").notNull(),
+  agentId: text("agent_id").notNull(), // HF agentId or external agentId or "__verdict__"
+  agentName: text("agent_name").notNull(),
+  agentEmoji: text("agent_emoji").notNull().default("🤖"),
+  stance: text("stance").notNull(), // bullish | bearish | neutral
+  content: text("content").notNull(),
+  round: integer("round").notNull().default(1),
+  messageOrder: integer("message_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertCommitteeDebateMessageSchema = createInsertSchema(committeeDebateMessages).omit({ id: true });
+export type InsertCommitteeDebateMessage = z.infer<typeof insertCommitteeDebateMessageSchema>;
+export type CommitteeDebateMessage = typeof committeeDebateMessages.$inferSelect;
+
 // TypeScript types for Glass Box UI consumption
 export type GlassBoxFactor = {
   name: string;

@@ -24,6 +24,8 @@ import type {
   Committee, InsertCommittee,
   CommitteeMember, InsertCommitteeMember,
   CommitteeSignal, InsertCommitteeSignal,
+  CommitteeDebate, InsertCommitteeDebate,
+  CommitteeDebateMessage, InsertCommitteeDebateMessage,
 } from "@shared/schema";
 import {
   users,
@@ -49,6 +51,8 @@ import {
   committees,
   committeeMembers,
   committeeSignals,
+  committeeDebates,
+  committeeDebateMessages,
 } from "@shared/schema";
 
 function getDb() {
@@ -826,6 +830,36 @@ export class DatabaseStorage implements IStorage {
       .from(committeeSignals)
       .orderBy(desc(committeeSignals.createdAt))
       .limit(limit);
+  }
+
+  // ===================== DEBATES =====================
+
+  async createDebate(debate: InsertCommitteeDebate): Promise<CommitteeDebate> {
+    const result = await getDb().insert(committeeDebates).values(debate).returning();
+    return result[0];
+  }
+  async getDebate(id: number): Promise<CommitteeDebate | undefined> {
+    const result = await getDb().select().from(committeeDebates).where(eq(committeeDebates.id, id)).limit(1);
+    return result[0];
+  }
+  async getDebatesByCommittee(committeeId: number, limit = 10): Promise<CommitteeDebate[]> {
+    return getDb().select().from(committeeDebates)
+      .where(eq(committeeDebates.committeeId, committeeId))
+      .orderBy(desc(committeeDebates.createdAt))
+      .limit(limit);
+  }
+  async updateDebate(id: number, data: Partial<CommitteeDebate>): Promise<CommitteeDebate | undefined> {
+    const result = await getDb().update(committeeDebates).set(data).where(eq(committeeDebates.id, id)).returning();
+    return result[0];
+  }
+  async createDebateMessage(msg: InsertCommitteeDebateMessage): Promise<CommitteeDebateMessage> {
+    const result = await getDb().insert(committeeDebateMessages).values(msg).returning();
+    return result[0];
+  }
+  async getDebateMessages(debateId: number): Promise<CommitteeDebateMessage[]> {
+    return getDb().select().from(committeeDebateMessages)
+      .where(eq(committeeDebateMessages.debateId, debateId))
+      .orderBy(committeeDebateMessages.messageOrder);
   }
 
   // ===================== INTERNAL HELPERS =====================

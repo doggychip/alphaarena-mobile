@@ -53,7 +53,77 @@ type SignalHistory = {
   memberVotes?: MemberVote[];
 };
 
+type DebateMessage = {
+  id: number;
+  agentId: string;
+  agentName: string;
+  agentEmoji: string;
+  stance: string;
+  content: string;
+  round: number;
+  messageOrder: number;
+};
+
+type DebateResult = {
+  debateId: number;
+  messages: DebateMessage[];
+  verdict: { signal: string; confidence: number; summary: string } | null;
+};
+
 const TICKERS = ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE", "AVAX", "DOT", "LINK"];
+
+function DebateTranscript({ debate }: { debate: DebateResult }) {
+  const stanceColor = (s: string) => {
+    const l = (s || "neutral").toLowerCase();
+    if (l.includes("bullish")) return "#00FF88";
+    if (l.includes("bearish")) return "#FF3B9A";
+    return "#888899";
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Header */}
+      <div className="text-center py-2">
+        <span className="text-lg">⚔️</span>
+        <p className="text-[10px] text-[#888899] font-display font-bold uppercase tracking-wider mt-1">Agent Debate</p>
+      </div>
+
+      {/* Messages */}
+      {debate.messages.filter(m => m.agentId !== "__verdict__").map((msg, i) => (
+        <div
+          key={msg.id}
+          className="rounded-xl bg-[#0A0A0F] border border-[#2A2A3E] p-3"
+          style={{ borderLeftColor: stanceColor(msg.stance), borderLeftWidth: 3 }}
+        >
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-lg">{msg.agentEmoji}</span>
+            <span className="font-display font-bold text-xs text-[#E8E8E8]">{msg.agentName}</span>
+            <SignalBadge signal={msg.stance} size="sm" />
+          </div>
+          <p className="text-[11px] text-[#CCCCDD] leading-relaxed">{msg.content}</p>
+        </div>
+      ))}
+
+      {/* Verdict */}
+      {debate.verdict && (
+        <div className="rounded-2xl bg-gradient-to-br from-[#FFD700]/10 to-[#00D4FF]/10 border border-[#FFD700]/30 p-4">
+          <div className="text-center mb-2">
+            <span className="text-2xl">⚖️</span>
+            <p className="font-display font-bold text-sm text-[#FFD700] mt-1">VERDICT</p>
+          </div>
+          <div className="text-center mb-3">
+            <SignalBadge signal={debate.verdict.signal} size="lg" />
+            <p className="text-2xl font-mono-num font-bold mt-2" style={{ color: stanceColor(debate.verdict.signal) }}>
+              {debate.verdict.confidence}%
+            </p>
+            <p className="text-[10px] text-[#888899] font-display">confidence</p>
+          </div>
+          <p className="text-[11px] text-[#CCCCDD] leading-relaxed">{debate.verdict.summary}</p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SignalBadge({ signal, size = "md" }: { signal: string; size?: "sm" | "md" | "lg" }) {
   const s = (signal || "neutral").toLowerCase();
@@ -119,6 +189,8 @@ export default function CommitteeDashboard({ params }: { params: { id: string } 
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showTradeModal, setShowTradeModal] = useState(false);
+  const [debateResult, setDebateResult] = useState<DebateResult | null>(null);
+  const [activeTab, setActiveTab] = useState<"consensus" | "debate">("consensus");
 
   const queryClient = useQueryClient();
 
@@ -161,6 +233,20 @@ export default function CommitteeDashboard({ params }: { params: { id: string } 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/committees"] });
       navigate("/");
+    },
+  });
+
+  const debateMutation = useMutation({
+    mutationFn: async ({ id, t }: { id: string; t: string }) => {
+      const res = await apiRequest("POST", `/api/committees/${id}/debate/${t}`);
+      return res.json() as Promise<DebateResult>;
+    },
+    onSuccess: (data) => {
+      setIsAnimating(true);
+      setTimeout(() => {
+        setDebateResult(data);
+        setIsAnimating(false);
+      }, 600);
     },
   });
 
@@ -266,9 +352,31 @@ export default function CommitteeDashboard({ params }: { params: { id: string } 
         </div>
       )}
 
-      {/* Consensus Generator */}
+      {/* Analysis Engine */}
       <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-br from-[#1A1A2E] to-[#0F0F1A] border border-[#2A2A3E] p-4">
-        <p className="text-xs font-display font-bold text-[#888899] mb-3 uppercase tracking-wider">🧬 Consensus Generator</p>
+        {/* Mode tabs */}
+        <div className="flex rounded-xl bg-[#0A0A0F] border border-[#2A2A3E] p-1 mb-3">
+          <button
+            onClick={() => setActiveTab("consensus")}
+            className={`flex-1 py-2 rounded-lg font-display font-bold text-xs transition-all ${
+              activeTab === "consensus"
+                ? "bg-[#00D4FF]/15 text-[#00D4FF] border border-[#00D4FF]/30"
+                : "text-[#888899]"
+            }`}
+          >
+            🧬 Quick Vote
+          </button>
+          <button
+            onClick={() => setActiveTab("debate")}
+            className={`flex-1 py-2 rounded-lg font-display font-bold text-xs transition-all ${
+              activeTab === "debate"
+                ? "bg-[#FFD700]/15 text-[#FFD700] border border-[#FFD700]/30"
+                : "text-[#888899]"
+            }`}
+          >
+            ⚔️ Agent Debate
+          </button>
+        </div>
 
         {/* Ticker selector */}
         <div className="flex gap-2 mb-3">
@@ -298,17 +406,55 @@ export default function CommitteeDashboard({ params }: { params: { id: string } 
               </div>
             )}
           </div>
-          <button
-            onClick={() => consensusMutation.mutate({ id: committeeId, t: ticker })}
-            disabled={consensusMutation.isPending || isAnimating}
-            className="px-4 py-2.5 rounded-xl font-display font-bold text-sm bg-gradient-to-r from-[#00D4FF] to-[#00FF88] text-black transition-all active:scale-95 disabled:opacity-50"
-          >
-            {consensusMutation.isPending || isAnimating ? "⟳" : "Generate"}
-          </button>
+          {activeTab === "consensus" ? (
+            <button
+              onClick={() => consensusMutation.mutate({ id: committeeId, t: ticker })}
+              disabled={consensusMutation.isPending || isAnimating}
+              className="px-4 py-2.5 rounded-xl font-display font-bold text-sm bg-gradient-to-r from-[#00D4FF] to-[#00FF88] text-black transition-all active:scale-95 disabled:opacity-50"
+            >
+              {consensusMutation.isPending || isAnimating ? "⟳" : "Generate"}
+            </button>
+          ) : (
+            <button
+              onClick={() => debateMutation.mutate({ id: committeeId, t: ticker })}
+              disabled={debateMutation.isPending || isAnimating}
+              className="px-4 py-2.5 rounded-xl font-display font-bold text-sm bg-gradient-to-r from-[#FFD700] to-[#FF3B9A] text-black transition-all active:scale-95 disabled:opacity-50"
+            >
+              {debateMutation.isPending || isAnimating ? "⟳" : "⚔️ Debate"}
+            </button>
+          )}
         </div>
 
-        {/* Consensus result */}
-        {consensusResult && !isAnimating && (
+        {/* Debate mode description */}
+        {activeTab === "debate" && !debateResult && !debateMutation.isPending && !isAnimating && (
+          <div className="rounded-xl bg-[#FFD700]/5 border border-[#FFD700]/20 p-3 mb-3">
+            <p className="text-[11px] text-[#CCCCDD] font-display leading-relaxed">
+              <span className="text-[#FFD700] font-bold">Debate mode:</span> Agents argue their positions sequentially, referencing and challenging each other's reasoning. A final verdict synthesizes the strongest arguments.
+            </p>
+          </div>
+        )}
+
+        {/* Loading animation */}
+        {(isAnimating || consensusMutation.isPending || debateMutation.isPending) && (
+          <div className="text-center py-8">
+            <div className="text-3xl animate-pulse">{activeTab === "debate" ? "⚔️" : "🧬"}</div>
+            <p className="text-[#888899] font-display text-xs mt-2">
+              {activeTab === "debate"
+                ? debateMutation.isPending ? "Agents debating... This may take a minute" : "Preparing verdict..."
+                : "Aggregating votes..."}
+            </p>
+            {activeTab === "debate" && debateMutation.isPending && (
+              <div className="mt-3 flex justify-center gap-1">
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="w-2 h-2 rounded-full bg-[#FFD700] animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Consensus result — Quick Vote tab */}
+        {activeTab === "consensus" && consensusResult && !isAnimating && !consensusMutation.isPending && (
           <div className="space-y-3">
             {/* Main signal */}
             <div className="text-center py-4 rounded-2xl bg-[#0A0A0F] border border-[#2A2A3E]">
@@ -380,18 +526,41 @@ export default function CommitteeDashboard({ params }: { params: { id: string } 
           </div>
         )}
 
-        {/* Loading animation */}
-        {isAnimating && (
-          <div className="text-center py-8">
-            <div className="text-3xl animate-pulse">🧬</div>
-            <p className="text-[#888899] font-display text-xs mt-2">Aggregating votes...</p>
+        {/* Debate result — Agent Debate tab */}
+        {activeTab === "debate" && debateResult && !isAnimating && !debateMutation.isPending && (
+          <div className="space-y-3">
+            <DebateTranscript debate={debateResult} />
+
+            {/* Trade on verdict button */}
+            {debateResult.verdict && debateResult.verdict.signal !== "neutral" && (
+              <button
+                data-testid="btn-trade-on-verdict"
+                onClick={() => setShowTradeModal(true)}
+                className={`w-full py-3.5 rounded-2xl font-display font-bold text-sm transition-all active:scale-95 flex items-center justify-center gap-2 ${
+                  debateResult.verdict.signal === "bullish"
+                    ? "bg-gradient-to-r from-[#00FF88] to-[#00D4FF] text-black glow-green"
+                    : "bg-gradient-to-r from-[#FF3B9A] to-[#FF6B6B] text-white glow-pink"
+                }`}
+              >
+                <span className="text-base">{debateResult.verdict.signal === "bullish" ? "🚀" : "📉"}</span>
+                Trade on verdict — {debateResult.verdict.signal === "bullish" ? "Buy" : "Sell"} {ticker}
+              </button>
+            )}
           </div>
         )}
 
-        {consensusMutation.isError && (
+        {/* Error states */}
+        {consensusMutation.isError && activeTab === "consensus" && (
           <div className="mt-2 px-3 py-2 rounded-xl bg-neon-pink/10 border border-neon-pink/30">
             <p className="text-xs text-neon-pink font-display">
               {(consensusMutation.error as Error)?.message || "Failed to generate consensus"}
+            </p>
+          </div>
+        )}
+        {debateMutation.isError && activeTab === "debate" && (
+          <div className="mt-2 px-3 py-2 rounded-xl bg-neon-pink/10 border border-neon-pink/30">
+            <p className="text-xs text-neon-pink font-display">
+              {(debateMutation.error as Error)?.message || "Debate failed — agents may be unavailable"}
             </p>
           </div>
         )}
@@ -486,18 +655,25 @@ export default function CommitteeDashboard({ params }: { params: { id: string } 
         </div>
       </div>
 
-      {/* Trade Modal — pre-filled from consensus */}
-      {showTradeModal && consensusResult && (
-        <TradeModal
-          mode={consensusResult.signal === "bullish" ? "buy" : "sell"}
-          onClose={() => setShowTradeModal(false)}
-          prices={prices}
-          agentName={committee?.name}
-          agentEmoji={committee?.emoji}
-          initialPair={`${consensusResult.ticker}/USD`}
-          initialAmount={"500"}
-        />
-      )}
+      {/* Trade Modal — pre-filled from consensus or debate verdict */}
+      {showTradeModal && (() => {
+        const tradeSignal = activeTab === "debate" && debateResult?.verdict
+          ? debateResult.verdict.signal
+          : consensusResult?.signal;
+        const tradeTicker = activeTab === "debate" ? ticker : consensusResult?.ticker || ticker;
+        if (!tradeSignal || tradeSignal === "neutral") return null;
+        return (
+          <TradeModal
+            mode={tradeSignal === "bullish" ? "buy" : "sell"}
+            onClose={() => setShowTradeModal(false)}
+            prices={prices}
+            agentName={committee?.name}
+            agentEmoji={committee?.emoji}
+            initialPair={`${tradeTicker}/USD`}
+            initialAmount={"500"}
+          />
+        );
+      })()}
     </div>
   );
 }

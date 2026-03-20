@@ -14,6 +14,7 @@ import {
   runScreen, generateThesis, generateMorningNote,
   type ScreenRequest, type ThesisRequest
 } from "./analysisEngine";
+import { runDebate } from "./debateEngine";
 import {
   fetchMarketSnapshot, fetchCoinDetails, fetchTickerDeepDive,
   fetchFearGreed, fetchGlobalCryptoData, fetchFxRates,
@@ -1783,6 +1784,61 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
       return res.json(normalized);
     } catch (err: any) {
       return res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ============================================================
+  // DEBATES — Multi-agent AI deliberation (HeartAI-style)
+  // ============================================================
+
+  // POST /api/committees/:id/debate/:ticker — Start a new debate
+  app.post("/api/committees/:id/debate/:ticker", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const committeeId = parseInt(String(req.params.id));
+      if (isNaN(committeeId)) return res.status(400).json({ message: "Invalid committee id" });
+      const ticker = String(req.params.ticker).toUpperCase();
+      const userId = getUserId(req);
+
+      const committee = await storage.getCommittee(committeeId);
+      if (!committee) return res.status(404).json({ message: "Committee not found" });
+      if (committee.userId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const result = await runDebate(storage, committeeId, ticker);
+      if (!result) {
+        return res.status(503).json({ message: "Debate engine unavailable — DEEPSEEK_API_KEY required" });
+      }
+
+      res.status(201).json(result);
+    } catch (err: any) {
+      console.error("Debate error:", err);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET /api/committees/:id/debates — List recent debates for a committee
+  app.get("/api/committees/:id/debates", async (req: Request, res: Response) => {
+    try {
+      const committeeId = parseInt(String(req.params.id));
+      if (isNaN(committeeId)) return res.status(400).json({ message: "Invalid committee id" });
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const debates = await storage.getDebatesByCommittee(committeeId, limit);
+      res.json(debates);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET /api/debates/:debateId — Get full debate with all messages
+  app.get("/api/debates/:debateId", async (req: Request, res: Response) => {
+    try {
+      const debateId = parseInt(String(req.params.debateId));
+      if (isNaN(debateId)) return res.status(400).json({ message: "Invalid debate id" });
+      const debate = await storage.getDebate(debateId);
+      if (!debate) return res.status(404).json({ message: "Debate not found" });
+      const messages = await storage.getDebateMessages(debateId);
+      res.json({ ...debate, messages });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
     }
   });
 

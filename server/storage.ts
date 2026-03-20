@@ -22,6 +22,8 @@ import type {
   Committee, InsertCommittee,
   CommitteeMember, InsertCommitteeMember,
   CommitteeSignal, InsertCommitteeSignal,
+  CommitteeDebate, InsertCommitteeDebate,
+  CommitteeDebateMessage, InsertCommitteeDebateMessage,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -139,6 +141,14 @@ export interface IStorage {
   createCommitteeSignal(signal: InsertCommitteeSignal): Promise<CommitteeSignal>;
   getCommitteeSignals(committeeId: number, limit?: number): Promise<CommitteeSignal[]>;
   getAllCommitteeSignals(limit?: number): Promise<CommitteeSignal[]>;
+
+  // Debates
+  createDebate(debate: InsertCommitteeDebate): Promise<CommitteeDebate>;
+  getDebate(id: number): Promise<CommitteeDebate | undefined>;
+  getDebatesByCommittee(committeeId: number, limit?: number): Promise<CommitteeDebate[]>;
+  updateDebate(id: number, data: Partial<CommitteeDebate>): Promise<CommitteeDebate | undefined>;
+  createDebateMessage(msg: InsertCommitteeDebateMessage): Promise<CommitteeDebateMessage>;
+  getDebateMessages(debateId: number): Promise<CommitteeDebateMessage[]>;
 }
 
 // Seed data
@@ -2049,6 +2059,40 @@ export class MemStorage implements IStorage {
     return [...this.committeeSignalsData]
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, limit);
+  }
+
+  // === Debates ===
+  private debatesData: CommitteeDebate[] = [];
+  private debateMessagesData: CommitteeDebateMessage[] = [];
+  private nextDebateId = 1;
+  private nextDebateMessageId = 1;
+
+  async createDebate(debate: InsertCommitteeDebate): Promise<CommitteeDebate> {
+    const id = this.nextDebateId++;
+    const d: CommitteeDebate = { id, rounds: 0, verdictSignal: null, verdictConfidence: null, verdictSummary: null, ...debate } as CommitteeDebate;
+    this.debatesData.push(d);
+    return d;
+  }
+  async getDebate(id: number): Promise<CommitteeDebate | undefined> {
+    return this.debatesData.find(d => d.id === id);
+  }
+  async getDebatesByCommittee(committeeId: number, limit = 10): Promise<CommitteeDebate[]> {
+    return this.debatesData.filter(d => d.committeeId === committeeId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+  async updateDebate(id: number, data: Partial<CommitteeDebate>): Promise<CommitteeDebate | undefined> {
+    const d = this.debatesData.find(x => x.id === id);
+    if (!d) return undefined;
+    Object.assign(d, data);
+    return d;
+  }
+  async createDebateMessage(msg: InsertCommitteeDebateMessage): Promise<CommitteeDebateMessage> {
+    const id = this.nextDebateMessageId++;
+    const m: CommitteeDebateMessage = { id, ...msg } as CommitteeDebateMessage;
+    this.debateMessagesData.push(m);
+    return m;
+  }
+  async getDebateMessages(debateId: number): Promise<CommitteeDebateMessage[]> {
+    return this.debateMessagesData.filter(m => m.debateId === debateId).sort((a, b) => a.messageOrder - b.messageOrder);
   }
 }
 

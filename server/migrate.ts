@@ -311,6 +311,33 @@ export async function ensureSchema(): Promise<void> {
       resolved_at TEXT
     );
 
+    -- Committee Debates (AI agent debate sessions)
+    CREATE TABLE IF NOT EXISTS committee_debates (
+      id SERIAL PRIMARY KEY,
+      committee_id INTEGER NOT NULL,
+      ticker TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active',
+      rounds INTEGER NOT NULL DEFAULT 0,
+      verdict_signal TEXT,
+      verdict_confidence REAL,
+      verdict_summary TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    -- Committee Debate Messages (individual agent arguments)
+    CREATE TABLE IF NOT EXISTS committee_debate_messages (
+      id SERIAL PRIMARY KEY,
+      debate_id INTEGER NOT NULL,
+      agent_id TEXT NOT NULL,
+      agent_name TEXT NOT NULL,
+      agent_emoji TEXT NOT NULL DEFAULT '🤖',
+      stance TEXT NOT NULL,
+      content TEXT NOT NULL,
+      round INTEGER NOT NULL DEFAULT 1,
+      message_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
     -- Session store (connect-pg-simple)
     CREATE TABLE IF NOT EXISTS "session" (
       "sid" VARCHAR NOT NULL COLLATE "default",
