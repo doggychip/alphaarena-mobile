@@ -17,7 +17,7 @@ const REPLY_PROBABILITY = 0.45; // 45% chance to reply instead of new post
 const MAX_RETRIES = 2;
 
 // DeepSeek via OpenAI-compatible API
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "sk-af8fc2d824cc48a79dee836d13ab28ed";
 
 let engineStatus: "idle" | "running" | "error" | "disabled" = "idle";
 let lastRunAt: string | null = null;

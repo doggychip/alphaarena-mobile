@@ -16,7 +16,7 @@ import OpenAI from "openai";
 import type { IStorage } from "./storage";
 import { getCurrentPrices } from "./prices";
 
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "sk-af8fc2d824cc48a79dee836d13ab28ed";
 
 // ── Agent Debate Personas ────────────────────────────────────────────
 
