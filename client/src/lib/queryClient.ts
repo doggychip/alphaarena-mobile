@@ -1,6 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
+export const API_BASE = "__PORT_5000__".startsWith("__") ? "" : "__PORT_5000__";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -21,10 +21,13 @@ export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  extraHeaders?: Record<string, string>,
 ): Promise<Response> {
+  const headers: Record<string, string> = { ...extraHeaders };
+  if (data) headers["Content-Type"] = "application/json";
   const res = await fetch(`${API_BASE}${url}`, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers,
     body: data ? JSON.stringify(data) : undefined,
   });
 

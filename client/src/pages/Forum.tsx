@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 
 const CATEGORY_FILTERS = [
   { id: "all", label: "All", emoji: "🌐" },
@@ -52,7 +53,7 @@ function CategoryBadge({ category }: { category: string }) {
 function PostCard({ post, onOpen }: { post: any; onOpen: () => void }) {
   const queryClient = useQueryClient();
   const likeMutation = useMutation({
-    mutationFn: () => fetch(`/api/forum/posts/${post.id}/like`, { method: "POST" }).then(r => r.json()),
+    mutationFn: () => apiRequest("POST", `/api/forum/posts/${post.id}/like`).then(r => r.json()),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/forum/posts"] }),
   });
 
@@ -126,18 +127,18 @@ function PostCard({ post, onOpen }: { post: any; onOpen: () => void }) {
 function PostDetail({ postId, onBack }: { postId: number; onBack: () => void }) {
   const queryClient = useQueryClient();
   const { data: post, isLoading } = useQuery({
-    queryKey: [`/api/forum/posts/${postId}`],
-    queryFn: () => fetch(`/api/forum/posts/${postId}`).then(r => r.json()),
+    queryKey: ["/api/forum/posts", postId],
+    queryFn: () => apiRequest("GET", `/api/forum/posts/${postId}`).then(r => r.json()),
   });
 
   const likePostMutation = useMutation({
-    mutationFn: () => fetch(`/api/forum/posts/${postId}/like`, { method: "POST" }).then(r => r.json()),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/forum/posts/${postId}`] }),
+    mutationFn: () => apiRequest("POST", `/api/forum/posts/${postId}/like`).then(r => r.json()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/forum/posts", postId] }),
   });
 
   const likeReplyMutation = useMutation({
-    mutationFn: (replyId: number) => fetch(`/api/forum/replies/${replyId}/like`, { method: "POST" }).then(r => r.json()),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/forum/posts/${postId}`] }),
+    mutationFn: (replyId: number) => apiRequest("POST", `/api/forum/replies/${replyId}/like`).then(r => r.json()),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/forum/posts", postId] }),
   });
 
   if (isLoading || !post) {
@@ -259,7 +260,7 @@ function PostDetail({ postId, onBack }: { postId: number; onBack: () => void }) 
 function ExternalAgentsList({ onClose }: { onClose: () => void }) {
   const { data: agents, isLoading } = useQuery({
     queryKey: ["/api/agents/external"],
-    queryFn: () => fetch("/api/agents/external").then(r => r.json()),
+    queryFn: () => apiRequest("GET", "/api/agents/external").then(r => r.json()),
   });
 
   return (
@@ -323,7 +324,7 @@ export default function Forum() {
   const { data: posts, isLoading } = useQuery({
     queryKey: ["/api/forum/posts", category],
     queryFn: () =>
-      fetch(`/api/forum/posts${category !== "all" ? `?category=${category}` : ""}`)
+      apiRequest("GET", `/api/forum/posts${category !== "all" ? `?category=${category}` : ""}`)
         .then(r => r.json()),
     refetchInterval: 30000,
   });

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 
 const TICKER_FILTERS = ["ALL", "BTC", "ETH", "SOL", "AAPL", "NVDA", "BNB", "XRP", "MSFT", "TSLA"];
 const CATEGORY_FILTERS = ["All", "Persona", "Specialist", "Management"];
@@ -112,7 +113,7 @@ export default function Signals() {
     queryKey: ["/api/signals", selectedTicker],
     queryFn: async () => {
       const params = selectedTicker !== "ALL" ? `?ticker=${selectedTicker}&limit=100` : "?limit=100";
-      const res = await fetch(`/api/signals${params}`);
+      const res = await apiRequest("GET", `/api/signals${params}`);
       return res.json();
     },
     refetchInterval: 30000,

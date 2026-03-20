@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 
 // Types from API
 type FactorProfile = {
@@ -312,7 +313,7 @@ function SignalDetailInline({ signalId }: { signalId: number }) {
   const { data, isLoading } = useQuery<SignalDetail>({
     queryKey: ["/api/glassbox/signal", signalId],
     queryFn: async () => {
-      const res = await fetch(`/api/glassbox/signal/${signalId}`);
+      const res = await apiRequest("GET", `/api/glassbox/signal/${signalId}`);
       if (!res.ok) throw new Error("Failed to load signal detail");
       return res.json();
     },
@@ -475,7 +476,7 @@ function AgentDetailInline({ agentId }: { agentId: string }) {
   const { data, isLoading } = useQuery<AgentProfile>({
     queryKey: ["/api/glassbox/agent", agentId],
     queryFn: async () => {
-      const res = await fetch(`/api/glassbox/agent/${agentId}`);
+      const res = await apiRequest("GET", `/api/glassbox/agent/${agentId}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -679,7 +680,7 @@ export default function GlassBox() {
   const { data, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["/api/glassbox/dashboard"],
     queryFn: async () => {
-      const res = await fetch("/api/glassbox/dashboard");
+      const res = await apiRequest("GET", "/api/glassbox/dashboard");
       if (!res.ok) throw new Error("Failed to load Glass Box dashboard");
       return res.json();
     },

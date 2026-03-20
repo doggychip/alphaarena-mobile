@@ -141,7 +141,7 @@ export default function HFAgentDetail() {
   const { data } = useQuery<any>({
     queryKey: ["/api/hf-agents", agentId],
     queryFn: async () => {
-      const res = await fetch(`/api/hf-agents/${agentId}`);
+      const res = await apiRequest("GET", `/api/hf-agents/${agentId}`);
       return res.json();
     },
     enabled: !!agentId,

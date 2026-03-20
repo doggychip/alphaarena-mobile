@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, API_BASE } from "@/lib/queryClient";
 
 const AVATAR_OPTIONS = [
   "🤖", "🧠", "🔮", "🐉", "⚡", "🦊", "🎯", "🌊",
@@ -81,7 +81,7 @@ export default function CustomizeAgent() {
     }
     setVerifying(true);
     try {
-      const res = await fetch("/api/ext/profile", {
+      const res = await fetch(`${API_BASE}/api/ext/profile`, {
         headers: { Authorization: `Bearer ${trimmed}` },
       });
       if (!res.ok) {
@@ -121,7 +121,7 @@ export default function CustomizeAgent() {
         if (!res.ok) throw new Error("Save failed");
         return res.json();
       } else {
-        const res = await fetch("/api/ext/profile", {
+        const res = await fetch(`${API_BASE}/api/ext/profile`, {
           method: "PUT",
           headers: {
             Authorization: `Bearer ${apiKey.trim()}`,

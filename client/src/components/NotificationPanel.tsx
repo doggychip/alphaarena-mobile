@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
 
 interface Notification {
   id: string;
@@ -50,7 +51,7 @@ export default function NotificationPanel({ onClose }: { onClose: () => void }) 
   const { data: hfAgentDetail } = useQuery<any>({
     queryKey: ["/api/hf-agents", selectedAgent],
     queryFn: async () => {
-      const res = await fetch(`/api/hf-agents/${selectedAgent}`);
+      const res = await apiRequest("GET", `/api/hf-agents/${selectedAgent}`);
       return res.json();
     },
     enabled: !!selectedAgent && isHF,
@@ -59,7 +60,7 @@ export default function NotificationPanel({ onClose }: { onClose: () => void }) 
   const { data: hfMapping } = useQuery<any[]>({
     queryKey: ["/api/agents", selectedAgent, "hedge-fund"],
     queryFn: async () => {
-      const res = await fetch(`/api/agents/${selectedAgent}/hedge-fund`);
+      const res = await apiRequest("GET", `/api/agents/${selectedAgent}/hedge-fund`);
       return res.json();
     },
     enabled: !!selectedAgent && !isHF,
@@ -265,7 +266,7 @@ export function useUnreadCount() {
   const { data: hfAgentDetail } = useQuery<any>({
     queryKey: ["/api/hf-agents", selectedAgent],
     queryFn: async () => {
-      const res = await fetch(`/api/hf-agents/${selectedAgent}`);
+      const res = await apiRequest("GET", `/api/hf-agents/${selectedAgent}`);
       return res.json();
     },
     enabled: !!selectedAgent && isHF,
@@ -274,7 +275,7 @@ export function useUnreadCount() {
   const { data: hfMapping } = useQuery<any[]>({
     queryKey: ["/api/agents", selectedAgent, "hedge-fund"],
     queryFn: async () => {
-      const res = await fetch(`/api/agents/${selectedAgent}/hedge-fund`);
+      const res = await apiRequest("GET", `/api/agents/${selectedAgent}/hedge-fund`);
       return res.json();
     },
     enabled: !!selectedAgent && !isHF,

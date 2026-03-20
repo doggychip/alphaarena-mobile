@@ -371,7 +371,7 @@ export default function AgentPage() {
   const { data: hfMapping } = useQuery<any[]>({
     queryKey: ["/api/agents", meData?.user?.selectedAgentType, "hedge-fund"],
     queryFn: async () => {
-      const res = await fetch(`/api/agents/${meData?.user?.selectedAgentType}/hedge-fund`);
+      const res = await apiRequest("GET", `/api/agents/${meData?.user?.selectedAgentType}/hedge-fund`);
       return res.json();
     },
     enabled: !!meData?.user?.selectedAgentType && !isHF,
@@ -380,7 +380,7 @@ export default function AgentPage() {
   const { data: hfAgentDetail } = useQuery<any>({
     queryKey: ["/api/hf-agents", meData?.user?.selectedAgentType],
     queryFn: async () => {
-      const res = await fetch(`/api/hf-agents/${meData?.user?.selectedAgentType}`);
+      const res = await apiRequest("GET", `/api/hf-agents/${meData?.user?.selectedAgentType}`);
       return res.json();
     },
     enabled: !!meData?.user?.selectedAgentType && isHF,

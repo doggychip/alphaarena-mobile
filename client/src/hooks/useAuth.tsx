@@ -1,6 +1,6 @@
 import { createContext, useContext, ReactNode, useCallback, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, API_BASE } from "@/lib/queryClient";
 
 type AuthUser = {
   id: number;
@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { data: authData, isLoading: isQueryLoading } = useQuery({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
-      const res = await fetch("/api/auth/me", { credentials: "same-origin" });
+      const res = await fetch(`${API_BASE}/api/auth/me`, { credentials: "same-origin" });
       if (res.status === 401) {
         // Server doesn't recognize us — check localStorage for re-auth
         const cached = loadAuthUser();
@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           try {
             const storedPw = localStorage.getItem("alphaarena_auth_pw");
             if (storedPw) {
-              const reAuthRes = await fetch("/api/auth/login", {
+              const reAuthRes = await fetch(`${API_BASE}/api/auth/login`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "same-origin",
