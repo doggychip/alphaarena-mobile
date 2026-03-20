@@ -324,7 +324,7 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
               <Link href={`/signals/${dAgent.agentId}`}>
                 <button
                   data-testid="btn-view-signals-other"
-                  className="px-4 py-2 rounded-xl bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30 font-display font-bold text-sm active:scale-95 transition-transform"
+                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
                   onClick={(e) => e.stopPropagation()}
                 >
                   View Signals
@@ -334,7 +334,7 @@ function AgentCarousel({ currentAgent, agentTier, isHF, agentMsg, displayPnl, us
               <Link href="/agent">
                 <button
                   data-testid="btn-view-signals-other"
-                  className="px-4 py-2 rounded-xl bg-neon-cyan/15 text-neon-cyan border border-neon-cyan/30 font-display font-bold text-sm active:scale-95 transition-transform"
+                  className="px-4 py-2 rounded-xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
                   onClick={(e) => e.stopPropagation()}
                 >
                   View Signals
