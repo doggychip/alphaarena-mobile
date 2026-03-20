@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type ExternalAgent = {
   agentId: string;
@@ -61,6 +61,9 @@ export default function RegisterAgent() {
     onSuccess: (data) => {
       setRegistrationResult(data);
       refetch();
+      // Invalidate profile caches so My Agent auto-detects immediately
+      queryClient.invalidateQueries({ queryKey: ["/api/my-agent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
     },
     onError: (err: Error) => {
       setFormError(err.message || "Registration failed");

@@ -354,8 +354,11 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     const agent = memeAgent || hfAgent;
     const agentTier = memeAgent ? "meme" : hfAgent ? "hedge_fund" : "meme";
     const userAchievements = await storage.getUserAchievements(userId);
+    // Auto-detect user's registered external agent (by ownerUserId, npcUserId, or username match)
+    const registeredAgent = await storage.getExternalAgentByUserId(userId);
     const { password: _pw, ...safeUser } = user as any;
-    res.json({ user: safeUser, portfolio, leaderboardEntry, agent, agentTier, achievements: userAchievements });
+    const safeRegisteredAgent = registeredAgent ? (({ apiKey: _, ...rest }: any) => rest)(registeredAgent) : null;
+    res.json({ user: safeUser, portfolio, leaderboardEntry, agent, agentTier, achievements: userAchievements, registeredAgent: safeRegisteredAgent });
   });
 
   // Update user (e.g., switch agent) — works for both auth'd and guest users

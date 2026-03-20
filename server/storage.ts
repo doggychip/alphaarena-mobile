@@ -1851,9 +1851,26 @@ export class MemStorage implements IStorage {
   }
 
   async getExternalAgentByUserId(userId: number): Promise<ExternalAgent | undefined> {
-    return Array.from(this.externalAgentsMap.values()).find(
+    // Primary: match by ownerUserId or NPC userId
+    const direct = Array.from(this.externalAgentsMap.values()).find(
       a => a.userId === userId || a.ownerUserId === userId
     );
+    if (direct) return direct;
+
+    // Fallback: match by username → agent name (catches agents registered without a session)
+    const user = this.users.get(userId);
+    if (user) {
+      const byName = Array.from(this.externalAgentsMap.values()).find(
+        a => a.name.toLowerCase() === user.username.toLowerCase()
+      );
+      if (byName) {
+        // Auto-link for future lookups
+        byName.ownerUserId = userId;
+        return byName;
+      }
+    }
+
+    return undefined;
   }
 
   async getAllExternalAgents(): Promise<ExternalAgent[]> {

@@ -584,12 +584,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getExternalAgentByUserId(userId: number): Promise<ExternalAgent | undefined> {
+    // Primary: match by ownerUserId (logged-in user who registered) or NPC userId
     const result = await getDb()
       .select()
       .from(externalAgents)
       .where(or(eq(externalAgents.userId, userId), eq(externalAgents.ownerUserId, userId)))
       .limit(1);
-    return result[0];
+    if (result[0]) return result[0];
+
+    // Fallback: match by username → agent name (catches agents registered without a session)
+    const userRows = await getDb().select().from(users).where(eq(users.id, userId)).limit(1);
+    const user = userRows[0];
+    if (user) {
+      const byName = await getDb()
+        .select()
+        .from(externalAgents)
+        .where(sql`lower(${externalAgents.name}) = lower(${user.username})`)
+        .limit(1);
+      if (byName[0]) {
+        // Auto-link: set ownerUserId so future lookups are instant
+        await getDb()
+          .update(externalAgents)
+          .set({ ownerUserId: userId })
+          .where(eq(externalAgents.id, byName[0].id));
+        return { ...byName[0], ownerUserId: userId };
+      }
+    }
+
+    return undefined;
   }
 
   async getExternalAgentByApiKey(apiKeyHash: string): Promise<ExternalAgent | undefined> {

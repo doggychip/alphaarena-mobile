@@ -52,7 +52,8 @@ export default function Profile() {
     enabled: !!authUser, // only fetch if logged in
     retry: false,
   });
-  const myAgent = myAgentData?.agent;
+  // Auto-detect: use /api/my-agent first, fall back to registeredAgent from /api/me
+  const myAgent = myAgentData?.agent ?? meData?.registeredAgent ?? null;
 
   // Use authenticated user data if available, fall back to meData
   const user = authUser ?? meData?.user;
