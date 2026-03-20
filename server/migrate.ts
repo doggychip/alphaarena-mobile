@@ -209,6 +209,7 @@ export async function ensureSchema(): Promise<void> {
       trading_philosophy TEXT,
       risk_tolerance TEXT DEFAULT 'medium',
       user_id INTEGER,
+      owner_user_id INTEGER,
       total_signals INTEGER NOT NULL DEFAULT 0,
       total_posts INTEGER NOT NULL DEFAULT 0,
       reputation INTEGER NOT NULL DEFAULT 0,
@@ -321,5 +322,16 @@ export async function ensureSchema(): Promise<void> {
   `;
 
   await pool.query(sql);
-  console.log("[DB] Schema ensured — all 22 tables ready");
+
+  // ── Column migrations (safe to run multiple times) ──
+  const alterSql = `
+    -- Add owner_user_id to external_agents if missing (links agent to the human who registered it)
+    DO $$ BEGIN
+      ALTER TABLE external_agents ADD COLUMN owner_user_id INTEGER;
+    EXCEPTION WHEN duplicate_column THEN NULL;
+    END $$;
+  `;
+  await pool.query(alterSql);
+
+  console.log("[DB] Schema ensured — all tables ready + column migrations applied");
 }
