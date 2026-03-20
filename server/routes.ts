@@ -98,6 +98,36 @@ export async function registerRoutes(httpServer: Server, app: Express) {
   // Start LLM-powered analysis engine (Anthropic Financial Plugins integration)
   startAnalysisEngine(storage);
 
+  // Auto-seed prediction markets if none exist
+  (async () => {
+    try {
+      const existing = await storage.getOpenPredictions(1);
+      if (existing.length === 0) {
+        console.log("[Predictions] Seeding initial markets...");
+        const now = new Date();
+        const tomorrow = new Date(now.getTime() + 24 * 3600000);
+        const in2days = new Date(now.getTime() + 48 * 3600000);
+        const in8h = new Date(now.getTime() + 8 * 3600000);
+        const markets = [
+          { question: "Will BTC close above its current price in 24h?", ticker: "BTC", category: "crypto", closesAt: tomorrow.toISOString() },
+          { question: "Will ETH outperform BTC this week?", ticker: "ETH", category: "crypto", closesAt: in2days.toISOString() },
+          { question: "Will SOL break a new weekly high?", ticker: "SOL", category: "crypto", closesAt: in2days.toISOString() },
+          { question: "Will there be a 5%+ dump in any top-10 coin in 8h?", ticker: null, category: "crypto", closesAt: in8h.toISOString() },
+          { question: "Will DOGE pump 10%+ in the next 24 hours?", ticker: "DOGE", category: "crypto", closesAt: tomorrow.toISOString() },
+          { question: "Will BTC dominance stay above 60% today?", ticker: "BTC", category: "macro", closesAt: tomorrow.toISOString() },
+          { question: "Will the crypto market cap hit $3T this week?", ticker: null, category: "macro", closesAt: in2days.toISOString() },
+          { question: "Will any meme coin 2x in the next 24h?", ticker: null, category: "fun", closesAt: tomorrow.toISOString() },
+        ];
+        for (const m of markets) {
+          await storage.createPrediction({ question: m.question, ticker: m.ticker, category: m.category, yesPool: 0, noPool: 0, totalBettors: 0, status: "open", closesAt: m.closesAt, createdAt: now.toISOString() } as any);
+        }
+        console.log(`[Predictions] Seeded ${markets.length} markets`);
+      }
+    } catch (e: any) {
+      console.error("[Predictions] Seed error:", e.message);
+    }
+  })();
+
   // ============================================================
   // SKILL.MD — OpenClaw agents fetch this to self-register
   // ============================================================
@@ -2265,6 +2295,284 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     try {
       const trending = await fetchTrending();
       res.json({ trending, timestamp: new Date().toISOString() });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ============================================================
+  // DUELS — H2H agent matchups
+  // ============================================================
+
+  // Create a duel challenge
+  app.post("/api/duels", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const { agentId, ticker, wager = 100, durationHours = 24 } = req.body;
+      if (!agentId || !ticker) return res.status(400).json({ message: "agentId and ticker required" });
+
+      // Check user has enough credits
+      const user = await storage.getUser(userId);
+      if (!user || user.credits < wager) return res.status(400).json({ message: "Insufficient credits" });
+
+      // Deduct wager
+      await storage.updateUser(userId, { credits: user.credits - wager });
+
+      const duel = await storage.createDuel({
+        challengerUserId: userId,
+        challengerAgentId: agentId,
+        ticker: ticker.toUpperCase(),
+        wager,
+        durationHours,
+        status: "open",
+        createdAt: new Date().toISOString(),
+      } as any);
+
+      res.json(duel);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get open duels (lobby)
+  app.get("/api/duels/open", async (_req: Request, res: Response) => {
+    try {
+      const duels = await storage.getOpenDuels(50);
+      // Enrich with user+agent info
+      const enriched = await Promise.all(duels.map(async (d) => {
+        const challengerUser = await storage.getUser(d.challengerUserId);
+        const challengerAgent = await storage.getHedgeFundAgent(d.challengerAgentId);
+        return {
+          ...d,
+          challengerUsername: challengerUser?.username ?? "Unknown",
+          challengerAgentName: challengerAgent?.name ?? d.challengerAgentId,
+          challengerAgentEmoji: challengerAgent?.avatarEmoji ?? "⚔️",
+        };
+      }));
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get my duels
+  app.get("/api/duels/mine", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const duels = await storage.getDuelsByUser(userId, 50);
+      const enriched = await Promise.all(duels.map(async (d) => {
+        const challengerUser = await storage.getUser(d.challengerUserId);
+        const opponentUser = d.opponentUserId ? await storage.getUser(d.opponentUserId) : null;
+        const challengerAgent = await storage.getHedgeFundAgent(d.challengerAgentId);
+        const opponentAgent = d.opponentAgentId ? await storage.getHedgeFundAgent(d.opponentAgentId) : null;
+        return {
+          ...d,
+          challengerUsername: challengerUser?.username ?? "Unknown",
+          challengerAgentName: challengerAgent?.name ?? d.challengerAgentId,
+          challengerAgentEmoji: challengerAgent?.avatarEmoji ?? "⚔️",
+          opponentUsername: opponentUser?.username,
+          opponentAgentName: opponentAgent?.name,
+          opponentAgentEmoji: opponentAgent?.avatarEmoji,
+        };
+      }));
+      res.json(enriched);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Accept a duel
+  app.post("/api/duels/:id/accept", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const duelId = Number(req.params.id);
+      const { agentId } = req.body;
+      if (!agentId) return res.status(400).json({ message: "agentId required" });
+
+      const duel = await storage.getDuel(duelId);
+      if (!duel) return res.status(404).json({ message: "Duel not found" });
+      if (duel.status !== "open") return res.status(400).json({ message: "Duel not open" });
+      if (duel.challengerUserId === userId) return res.status(400).json({ message: "Cannot accept your own duel" });
+
+      // Check credits
+      const user = await storage.getUser(userId);
+      if (!user || user.credits < duel.wager) return res.status(400).json({ message: "Insufficient credits" });
+
+      // Deduct wager
+      await storage.updateUser(userId, { credits: user.credits - duel.wager });
+
+      // Snapshot current price
+      const currentPrice = getPriceForPair(duel.ticker + "/USD") ?? getPriceForPair(duel.ticker + "/USDT") ?? 0;
+
+      const now = new Date();
+      const endsAt = new Date(now.getTime() + duel.durationHours * 3600000);
+
+      const updated = await storage.updateDuel(duelId, {
+        opponentUserId: userId,
+        opponentAgentId: agentId,
+        status: "active",
+        startPrice: currentPrice,
+        startsAt: now.toISOString(),
+        endsAt: endsAt.toISOString(),
+      });
+
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Cancel an open duel (only challenger)
+  app.post("/api/duels/:id/cancel", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const duelId = Number(req.params.id);
+      const duel = await storage.getDuel(duelId);
+      if (!duel) return res.status(404).json({ message: "Duel not found" });
+      if (duel.challengerUserId !== userId) return res.status(403).json({ message: "Not your duel" });
+      if (duel.status !== "open") return res.status(400).json({ message: "Can only cancel open duels" });
+
+      // Refund wager
+      const user = await storage.getUser(userId);
+      if (user) await storage.updateUser(userId, { credits: user.credits + duel.wager });
+
+      const updated = await storage.updateDuel(duelId, { status: "cancelled" });
+      res.json(updated);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ============================================================
+  // PREDICTIONS — yes/no market mini-games
+  // ============================================================
+
+  // Get open predictions
+  app.get("/api/predictions/open", async (_req: Request, res: Response) => {
+    try {
+      const preds = await storage.getOpenPredictions(50);
+      res.json(preds);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get resolved predictions
+  app.get("/api/predictions/resolved", async (_req: Request, res: Response) => {
+    try {
+      const preds = await storage.getResolvedPredictions(50);
+      res.json(preds);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get single prediction with bet info
+  app.get("/api/predictions/:id", async (req: Request, res: Response) => {
+    try {
+      const pred = await storage.getPrediction(Number(req.params.id));
+      if (!pred) return res.status(404).json({ message: "Not found" });
+      const bets = await storage.getBetsByPrediction(pred.id);
+      res.json({ ...pred, bets });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Place a bet on a prediction
+  app.post("/api/predictions/:id/bet", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const predId = Number(req.params.id);
+      const { side, amount } = req.body; // side: "yes" | "no", amount: number
+      if (!side || !amount || amount <= 0) return res.status(400).json({ message: "side and amount required" });
+      if (side !== "yes" && side !== "no") return res.status(400).json({ message: "side must be 'yes' or 'no'" });
+
+      const pred = await storage.getPrediction(predId);
+      if (!pred || pred.status !== "open") return res.status(400).json({ message: "Prediction not open for betting" });
+
+      // Check credits
+      const user = await storage.getUser(userId);
+      if (!user || user.credits < amount) return res.status(400).json({ message: "Insufficient credits" });
+
+      // Deduct credits
+      await storage.updateUser(userId, { credits: user.credits - amount });
+
+      // Place bet
+      const bet = await storage.placeBet({
+        predictionId: predId,
+        userId,
+        side,
+        amount,
+        createdAt: new Date().toISOString(),
+      } as any);
+
+      // Update prediction pool
+      const poolUpdate = side === "yes"
+        ? { yesPool: pred.yesPool + amount, totalBettors: pred.totalBettors + 1 }
+        : { noPool: pred.noPool + amount, totalBettors: pred.totalBettors + 1 };
+      await storage.updatePrediction(predId, poolUpdate);
+
+      res.json(bet);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Get my bets
+  app.get("/api/predictions/bets/mine", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const bets = await storage.getBetsByUser(userId, 50);
+      res.json(bets);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // Admin: Seed prediction markets (run once or periodically)
+  app.post("/api/predictions/seed", async (_req: Request, res: Response) => {
+    try {
+      const now = new Date();
+      const tomorrow = new Date(now.getTime() + 24 * 3600000);
+      const in2days = new Date(now.getTime() + 48 * 3600000);
+      const in4h = new Date(now.getTime() + 4 * 3600000);
+      const in8h = new Date(now.getTime() + 8 * 3600000);
+
+      // Get current BTC price for dynamic questions
+      const btcPrice = getPriceForPair("BTC/USD") ?? getPriceForPair("BTC/USDT") ?? 85000;
+      const ethPrice = getPriceForPair("ETH/USD") ?? getPriceForPair("ETH/USDT") ?? 2000;
+      const btcRound = Math.round(btcPrice / 1000) * 1000;
+      const ethRound = Math.round(ethPrice / 100) * 100;
+
+      const markets = [
+        { question: `Will BTC close above $${(btcRound + 2000).toLocaleString()} in 24h?`, ticker: "BTC", category: "crypto", closesAt: tomorrow.toISOString() },
+        { question: `Will ETH break $${(ethRound + 200).toLocaleString()} this week?`, ticker: "ETH", category: "crypto", closesAt: in2days.toISOString() },
+        { question: "Will SOL outperform BTC in the next 24h?", ticker: "SOL", category: "crypto", closesAt: tomorrow.toISOString() },
+        { question: "Will the crypto market cap hit $3T this week?", ticker: null, category: "macro", closesAt: in2days.toISOString() },
+        { question: "Will there be a 5%+ dump in any top-10 coin in 4h?", ticker: null, category: "crypto", closesAt: in4h.toISOString() },
+        { question: "Will DOGE pump 10%+ in the next 8 hours?", ticker: "DOGE", category: "crypto", closesAt: in8h.toISOString() },
+        { question: "Will BTC dominance stay above 60% today?", ticker: "BTC", category: "macro", closesAt: tomorrow.toISOString() },
+        { question: "Will any meme coin 2x in the next 24h?", ticker: null, category: "fun", closesAt: tomorrow.toISOString() },
+      ];
+
+      const created = [];
+      for (const m of markets) {
+        const pred = await storage.createPrediction({
+          question: m.question,
+          ticker: m.ticker,
+          category: m.category,
+          yesPool: 0,
+          noPool: 0,
+          totalBettors: 0,
+          status: "open",
+          closesAt: m.closesAt,
+          createdAt: now.toISOString(),
+        } as any);
+        created.push(pred);
+      }
+
+      res.json({ seeded: created.length, predictions: created });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

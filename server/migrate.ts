@@ -338,6 +338,56 @@ export async function ensureSchema(): Promise<void> {
       created_at TEXT NOT NULL
     );
 
+    -- Duels (H2H agent matchups)
+    CREATE TABLE IF NOT EXISTS duels (
+      id SERIAL PRIMARY KEY,
+      challenger_user_id INTEGER NOT NULL,
+      challenger_agent_id TEXT NOT NULL,
+      opponent_user_id INTEGER,
+      opponent_agent_id TEXT,
+      ticker TEXT NOT NULL,
+      wager INTEGER NOT NULL DEFAULT 100,
+      duration_hours INTEGER NOT NULL DEFAULT 24,
+      status TEXT NOT NULL DEFAULT 'open',
+      start_price REAL,
+      end_price REAL,
+      winner_user_id INTEGER,
+      challenger_return REAL,
+      opponent_return REAL,
+      created_at TEXT NOT NULL,
+      starts_at TEXT,
+      ends_at TEXT,
+      resolved_at TEXT
+    );
+
+    -- Predictions (yes/no market mini-games)
+    CREATE TABLE IF NOT EXISTS predictions (
+      id SERIAL PRIMARY KEY,
+      question TEXT NOT NULL,
+      ticker TEXT,
+      category TEXT NOT NULL DEFAULT 'crypto',
+      yes_pool INTEGER NOT NULL DEFAULT 0,
+      no_pool INTEGER NOT NULL DEFAULT 0,
+      total_bettors INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'open',
+      outcome BOOLEAN,
+      closes_at TEXT NOT NULL,
+      resolves_at TEXT,
+      created_at TEXT NOT NULL,
+      resolved_at TEXT
+    );
+
+    -- Prediction Bets
+    CREATE TABLE IF NOT EXISTS prediction_bets (
+      id SERIAL PRIMARY KEY,
+      prediction_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      side TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      payout INTEGER,
+      created_at TEXT NOT NULL
+    );
+
     -- Session store (connect-pg-simple)
     CREATE TABLE IF NOT EXISTS "session" (
       "sid" VARCHAR NOT NULL COLLATE "default",

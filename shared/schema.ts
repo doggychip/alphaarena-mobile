@@ -515,3 +515,81 @@ export type GlassBoxAgentProfile = {
   factorProfile: { fundamental: number; technical: number; sentiment: number; macro: number; valuation: number };
   auditTrail: { total: number; correct: number; incorrect: number; pending: number; avgPnl: number };
 };
+
+// ============================================================
+// DUELS — head-to-head agent matchups
+// ============================================================
+
+export const duels = pgTable("duels", {
+  id: serial("id").primaryKey(),
+  // Challenger
+  challengerUserId: integer("challenger_user_id").notNull(),
+  challengerAgentId: text("challenger_agent_id").notNull(), // HF agentId
+  // Opponent (null until accepted)
+  opponentUserId: integer("opponent_user_id"),
+  opponentAgentId: text("opponent_agent_id"),
+  // Duel config
+  ticker: text("ticker").notNull(), // e.g. "BTC", "ETH", "AAPL"
+  wager: integer("wager").notNull().default(100), // credits wagered by each side
+  durationHours: integer("duration_hours").notNull().default(24),
+  // State
+  status: text("status").notNull().default("open"), // open | active | resolved | cancelled
+  // Snapshot prices for scoring
+  startPrice: real("start_price"),
+  endPrice: real("end_price"),
+  // Results
+  winnerUserId: integer("winner_user_id"),
+  challengerReturn: real("challenger_return"), // % return from agent signal
+  opponentReturn: real("opponent_return"),
+  // Timestamps
+  createdAt: text("created_at").notNull(),
+  startsAt: text("starts_at"), // when opponent accepts
+  endsAt: text("ends_at"), // startsAt + durationHours
+  resolvedAt: text("resolved_at"),
+});
+
+export const insertDuelSchema = createInsertSchema(duels).omit({ id: true });
+export type InsertDuel = z.infer<typeof insertDuelSchema>;
+export type Duel = typeof duels.$inferSelect;
+
+// ============================================================
+// PREDICTIONS — yes/no prediction market mini-games
+// ============================================================
+
+export const predictions = pgTable("predictions", {
+  id: serial("id").primaryKey(),
+  question: text("question").notNull(), // "Will BTC close above $70K today?"
+  ticker: text("ticker"), // optional, for display
+  category: text("category").notNull().default("crypto"), // crypto | equity | macro | fun
+  // Pool
+  yesPool: integer("yes_pool").notNull().default(0), // total credits wagered YES
+  noPool: integer("no_pool").notNull().default(0), // total credits wagered NO
+  totalBettors: integer("total_bettors").notNull().default(0),
+  // Resolution
+  status: text("status").notNull().default("open"), // open | closed | resolved
+  outcome: boolean("outcome"), // true = YES wins, false = NO wins, null = unresolved
+  // Timing
+  closesAt: text("closes_at").notNull(), // when betting closes
+  resolvesAt: text("resolves_at"), // when outcome is determined
+  createdAt: text("created_at").notNull(),
+  resolvedAt: text("resolved_at"),
+});
+
+export const insertPredictionSchema = createInsertSchema(predictions).omit({ id: true });
+export type InsertPrediction = z.infer<typeof insertPredictionSchema>;
+export type Prediction = typeof predictions.$inferSelect;
+
+// Individual bets on predictions
+export const predictionBets = pgTable("prediction_bets", {
+  id: serial("id").primaryKey(),
+  predictionId: integer("prediction_id").notNull(),
+  userId: integer("user_id").notNull(),
+  side: text("side").notNull(), // "yes" | "no"
+  amount: integer("amount").notNull(),
+  payout: integer("payout"), // filled on resolution
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertPredictionBetSchema = createInsertSchema(predictionBets).omit({ id: true });
+export type InsertPredictionBet = z.infer<typeof insertPredictionBetSchema>;
+export type PredictionBet = typeof predictionBets.$inferSelect;

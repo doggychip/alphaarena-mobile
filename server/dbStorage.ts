@@ -26,6 +26,9 @@ import type {
   CommitteeSignal, InsertCommitteeSignal,
   CommitteeDebate, InsertCommitteeDebate,
   CommitteeDebateMessage, InsertCommitteeDebateMessage,
+  Duel, InsertDuel,
+  Prediction, InsertPrediction,
+  PredictionBet, InsertPredictionBet,
 } from "@shared/schema";
 import {
   users,
@@ -53,6 +56,9 @@ import {
   committeeSignals,
   committeeDebates,
   committeeDebateMessages,
+  duels,
+  predictions,
+  predictionBets,
 } from "@shared/schema";
 
 function getDb() {
@@ -888,5 +894,93 @@ export class DatabaseStorage implements IStorage {
       .update(hedgeFundAgents)
       .set({ totalSignals, avgConfidence, winRate })
       .where(eq(hedgeFundAgents.agentId, agentId));
+  }
+
+  // ===================== DUELS =====================
+
+  async createDuel(duel: InsertDuel): Promise<Duel> {
+    const [row] = await getDb().insert(duels).values(duel).returning();
+    return row;
+  }
+
+  async getDuel(id: number): Promise<Duel | undefined> {
+    const [row] = await getDb().select().from(duels).where(eq(duels.id, id));
+    return row;
+  }
+
+  async getOpenDuels(limit = 50): Promise<Duel[]> {
+    return getDb().select().from(duels)
+      .where(eq(duels.status, "open"))
+      .orderBy(desc(duels.createdAt))
+      .limit(limit);
+  }
+
+  async getDuelsByUser(userId: number, limit = 50): Promise<Duel[]> {
+    return getDb().select().from(duels)
+      .where(or(
+        eq(duels.challengerUserId, userId),
+        eq(duels.opponentUserId, userId)
+      ))
+      .orderBy(desc(duels.createdAt))
+      .limit(limit);
+  }
+
+  async updateDuel(id: number, data: Partial<Duel>): Promise<Duel | undefined> {
+    const [row] = await getDb().update(duels).set(data).where(eq(duels.id, id)).returning();
+    return row;
+  }
+
+  // ===================== PREDICTIONS =====================
+
+  async createPrediction(pred: InsertPrediction): Promise<Prediction> {
+    const [row] = await getDb().insert(predictions).values(pred).returning();
+    return row;
+  }
+
+  async getPrediction(id: number): Promise<Prediction | undefined> {
+    const [row] = await getDb().select().from(predictions).where(eq(predictions.id, id));
+    return row;
+  }
+
+  async getOpenPredictions(limit = 50): Promise<Prediction[]> {
+    return getDb().select().from(predictions)
+      .where(eq(predictions.status, "open"))
+      .orderBy(desc(predictions.createdAt))
+      .limit(limit);
+  }
+
+  async getResolvedPredictions(limit = 50): Promise<Prediction[]> {
+    return getDb().select().from(predictions)
+      .where(eq(predictions.status, "resolved"))
+      .orderBy(desc(predictions.resolvedAt))
+      .limit(limit);
+  }
+
+  async updatePrediction(id: number, data: Partial<Prediction>): Promise<Prediction | undefined> {
+    const [row] = await getDb().update(predictions).set(data).where(eq(predictions.id, id)).returning();
+    return row;
+  }
+
+  async placeBet(bet: InsertPredictionBet): Promise<PredictionBet> {
+    const [row] = await getDb().insert(predictionBets).values(bet).returning();
+    return row;
+  }
+
+  async getBetsByPrediction(predictionId: number): Promise<PredictionBet[]> {
+    return getDb().select().from(predictionBets)
+      .where(eq(predictionBets.predictionId, predictionId))
+      .orderBy(desc(predictionBets.createdAt));
+  }
+
+  async getBetsByUser(userId: number, limit = 50): Promise<PredictionBet[]> {
+    return getDb().select().from(predictionBets)
+      .where(eq(predictionBets.userId, userId))
+      .orderBy(desc(predictionBets.createdAt))
+      .limit(limit);
+  }
+
+  async updateBet(id: number, data: Partial<PredictionBet>): Promise<PredictionBet | undefined> {
+    const [row] = await getDb().update(predictionBets).set(data).where(eq(predictionBets.id, id)).returning();
+    return row;
   }
 }

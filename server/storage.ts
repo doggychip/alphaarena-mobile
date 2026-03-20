@@ -24,6 +24,9 @@ import type {
   CommitteeSignal, InsertCommitteeSignal,
   CommitteeDebate, InsertCommitteeDebate,
   CommitteeDebateMessage, InsertCommitteeDebateMessage,
+  Duel, InsertDuel,
+  Prediction, InsertPrediction,
+  PredictionBet, InsertPredictionBet,
 } from "@shared/schema";
 
 export interface IStorage {
@@ -149,6 +152,24 @@ export interface IStorage {
   updateDebate(id: number, data: Partial<CommitteeDebate>): Promise<CommitteeDebate | undefined>;
   createDebateMessage(msg: InsertCommitteeDebateMessage): Promise<CommitteeDebateMessage>;
   getDebateMessages(debateId: number): Promise<CommitteeDebateMessage[]>;
+
+  // Duels
+  createDuel(duel: InsertDuel): Promise<Duel>;
+  getDuel(id: number): Promise<Duel | undefined>;
+  getOpenDuels(limit?: number): Promise<Duel[]>;
+  getDuelsByUser(userId: number, limit?: number): Promise<Duel[]>;
+  updateDuel(id: number, data: Partial<Duel>): Promise<Duel | undefined>;
+
+  // Predictions
+  createPrediction(pred: InsertPrediction): Promise<Prediction>;
+  getPrediction(id: number): Promise<Prediction | undefined>;
+  getOpenPredictions(limit?: number): Promise<Prediction[]>;
+  getResolvedPredictions(limit?: number): Promise<Prediction[]>;
+  updatePrediction(id: number, data: Partial<Prediction>): Promise<Prediction | undefined>;
+  placeBet(bet: InsertPredictionBet): Promise<PredictionBet>;
+  getBetsByPrediction(predictionId: number): Promise<PredictionBet[]>;
+  getBetsByUser(userId: number, limit?: number): Promise<PredictionBet[]>;
+  updateBet(id: number, data: Partial<PredictionBet>): Promise<PredictionBet | undefined>;
 }
 
 // Seed data
@@ -2093,6 +2114,73 @@ export class MemStorage implements IStorage {
   }
   async getDebateMessages(debateId: number): Promise<CommitteeDebateMessage[]> {
     return this.debateMessagesData.filter(m => m.debateId === debateId).sort((a, b) => a.messageOrder - b.messageOrder);
+  }
+
+  // ============= DUELS (MemStorage stubs) =============
+  private duelsData: Duel[] = [];
+  private nextDuelId = 1;
+  async createDuel(duel: InsertDuel): Promise<Duel> {
+    const d: Duel = { id: this.nextDuelId++, ...duel } as Duel;
+    this.duelsData.push(d);
+    return d;
+  }
+  async getDuel(id: number): Promise<Duel | undefined> {
+    return this.duelsData.find(d => d.id === id);
+  }
+  async getOpenDuels(limit = 50): Promise<Duel[]> {
+    return this.duelsData.filter(d => d.status === "open").sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+  async getDuelsByUser(userId: number, limit = 50): Promise<Duel[]> {
+    return this.duelsData.filter(d => d.challengerUserId === userId || d.opponentUserId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+  async updateDuel(id: number, data: Partial<Duel>): Promise<Duel | undefined> {
+    const d = this.duelsData.find(x => x.id === id);
+    if (!d) return undefined;
+    Object.assign(d, data);
+    return d;
+  }
+
+  // ============= PREDICTIONS (MemStorage stubs) =============
+  private predictionsData: Prediction[] = [];
+  private predictionBetsData: PredictionBet[] = [];
+  private nextPredictionId = 1;
+  private nextBetId = 1;
+  async createPrediction(pred: InsertPrediction): Promise<Prediction> {
+    const p: Prediction = { id: this.nextPredictionId++, ...pred } as Prediction;
+    this.predictionsData.push(p);
+    return p;
+  }
+  async getPrediction(id: number): Promise<Prediction | undefined> {
+    return this.predictionsData.find(p => p.id === id);
+  }
+  async getOpenPredictions(limit = 50): Promise<Prediction[]> {
+    return this.predictionsData.filter(p => p.status === "open").sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+  async getResolvedPredictions(limit = 50): Promise<Prediction[]> {
+    return this.predictionsData.filter(p => p.status === "resolved").sort((a, b) => (b.resolvedAt ?? "").localeCompare(a.resolvedAt ?? "")).slice(0, limit);
+  }
+  async updatePrediction(id: number, data: Partial<Prediction>): Promise<Prediction | undefined> {
+    const p = this.predictionsData.find(x => x.id === id);
+    if (!p) return undefined;
+    Object.assign(p, data);
+    return p;
+  }
+  async placeBet(bet: InsertPredictionBet): Promise<PredictionBet> {
+    const b: PredictionBet = { id: this.nextBetId++, ...bet } as PredictionBet;
+    this.predictionBetsData.push(b);
+    return b;
+  }
+  async getBetsByPrediction(predictionId: number): Promise<PredictionBet[]> {
+    return this.predictionBetsData.filter(b => b.predictionId === predictionId);
+  }
+  async getBetsByUser(userId: number, limit = 50): Promise<PredictionBet[]> {
+    return this.predictionBetsData.filter(b => b.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  }
+  async updateBet(id: number, data: Partial<PredictionBet>): Promise<PredictionBet | undefined> {
+    const b = this.predictionBetsData.find(x => x.id === id);
+    if (!b) return undefined;
+    Object.assign(b, data);
+    return b;
   }
 }
 

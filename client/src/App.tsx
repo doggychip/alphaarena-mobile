@@ -23,6 +23,7 @@ import RegisterAgent from "@/pages/RegisterAgent";
 import CustomizeAgent from "@/pages/CustomizeAgent";
 import ResearchTools from "@/pages/ResearchTools";
 import AgentDirectory from "@/pages/AgentDirectory";
+import Play from "@/pages/Play";
 import NotFound from "@/pages/not-found";
 
 function LoadingScreen() {
@@ -141,6 +142,7 @@ function AppRouter() {
               <Route path="/register-agent" component={RegisterAgent} />
               <Route path="/agent-directory" component={AgentDirectory} />
               <Route path="/customize-agent" component={CustomizeAgent} />
+              <Route path="/play" component={Play} />
               <Route path="/research" component={ResearchTools} />
               <Route path="/stake" component={Stake} />
               <Route path="/profile" component={Profile} />

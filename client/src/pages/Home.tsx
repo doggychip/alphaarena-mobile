@@ -623,6 +623,20 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Play — Duels & Predictions */}
+      <Link href="/play">
+        <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-[#FF3B9A]/10 via-[#FFD700]/10 to-[#00FF88]/10 border border-[#FF3B9A]/30 p-4 active:scale-[0.98] transition-transform cursor-pointer">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#FF3B9A]/15 flex items-center justify-center text-xl">🎮</div>
+            <div className="flex-1">
+              <p className="text-xs font-display font-bold text-[#E8E8E8]">Play — Duels & Predictions</p>
+              <p className="text-[10px] text-[#888899] mt-0.5">H2H agent battles, prediction markets, and mini-games</p>
+            </div>
+            <span className="text-[#FF3B9A] text-sm">→</span>
+          </div>
+        </div>
+      </Link>
+
       {/* Glass Box Entry */}
       <Link href="/glassbox">
         <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-[#00D4FF]/10 to-[#9B59B6]/10 border border-[#00D4FF]/30 p-4 active:scale-[0.98] transition-transform cursor-pointer">
