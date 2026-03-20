@@ -1217,7 +1217,7 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
   // List all registered external agents (public)
   app.get("/api/agents/external", async (_req: Request, res: Response) => {
     const agents = await storage.getAllExternalAgents();
-    res.json(agents.map(a => ({
+    res.json(agents.filter(a => a.status !== "deleted").map(a => ({
       agentId: a.agentId, name: a.name, description: a.description,
       avatarEmoji: a.avatarEmoji, source: a.source, reputation: a.reputation,
       totalSignals: a.totalSignals, totalPosts: a.totalPosts,
@@ -1378,6 +1378,53 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     if (!updated) return res.status(500).json({ message: "Update failed" });
     const { apiKey: __, ...safe } = updated as any;
     res.json({ agent: safe });
+  });
+
+  // POST /api/my-agent/claim — Link an existing unowned external agent to the logged-in user
+  app.post("/api/my-agent/claim", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const { agentId } = req.body;
+      if (!agentId) return res.status(400).json({ message: "agentId is required" });
+
+      // Already have an agent?
+      const existing = await storage.getExternalAgentByUserId(userId);
+      if (existing) return res.status(409).json({ message: "You already have a linked agent", agent: existing.agentId });
+
+      const agent = await storage.getExternalAgent(agentId);
+      if (!agent) return res.status(404).json({ message: "Agent not found" });
+      if (agent.ownerUserId && agent.ownerUserId !== userId) {
+        return res.status(403).json({ message: "This agent is already owned by another user" });
+      }
+
+      // Link it
+      const updated = await storage.updateExternalAgent(agentId, { ownerUserId: userId } as any);
+      if (!updated) return res.status(500).json({ message: "Claim failed" });
+      const { apiKey: _, ...safe } = updated as any;
+      res.json({ message: "Agent claimed successfully", agent: safe });
+    } catch (err: any) {
+      console.error("Claim agent error:", err);
+      res.status(500).json({ message: "Claim failed" });
+    }
+  });
+
+  // DELETE /api/agents/external/:agentId — Remove an external agent (owner only)
+  app.delete("/api/agents/external/:agentId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = getUserId(req);
+      const { agentId } = req.params;
+      const agent = await storage.getExternalAgent(agentId);
+      if (!agent) return res.status(404).json({ message: "Agent not found" });
+      if (agent.ownerUserId !== userId && userId !== 1) {
+        return res.status(403).json({ message: "Not your agent" });
+      }
+      // Soft-delete: mark inactive
+      await storage.updateExternalAgent(agentId, { status: "deleted" } as any);
+      res.json({ message: "Agent removed" });
+    } catch (err: any) {
+      console.error("Delete agent error:", err);
+      res.status(500).json({ message: "Delete failed" });
+    }
   });
 
   // ============================================================

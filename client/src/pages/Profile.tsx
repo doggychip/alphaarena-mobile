@@ -1,8 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 type MyAgent = {
   agentId: string;
@@ -54,6 +55,25 @@ export default function Profile() {
   });
   // Auto-detect: use /api/my-agent first, fall back to registeredAgent from /api/me
   const myAgent = myAgentData?.agent ?? meData?.registeredAgent ?? null;
+
+  // Fetch external agents list for claim flow (only if user has no agent)
+  const { data: externalAgents = [] } = useQuery<any[]>({
+    queryKey: ["/api/agents/external"],
+    enabled: !!authUser && !myAgent,
+  });
+  const [showClaim, setShowClaim] = useState(false);
+
+  const claimMutation = useMutation({
+    mutationFn: async (agentId: string) => {
+      const res = await apiRequest("POST", "/api/my-agent/claim", { agentId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/my-agent"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/me"] });
+      setShowClaim(false);
+    },
+  });
 
   // Use authenticated user data if available, fall back to meData
   const user = authUser ?? meData?.user;
@@ -183,19 +203,67 @@ export default function Profile() {
               <div className="text-[#00D4FF] text-lg flex-shrink-0">✏️</div>
             </button>
           ) : (
-            <button
-              onClick={() => navigate("/register-agent")}
-              className="w-full rounded-2xl bg-[#1A1A2E] border border-dashed border-[#2A2A3E] p-4 flex items-center gap-3 transition-all active:scale-[0.98] active:border-[#00FF88]/40 text-left"
-            >
-              <div className="w-12 h-12 rounded-full bg-[#0A0A0F] flex items-center justify-center text-2xl flex-shrink-0 border border-dashed border-[#2A2A3E]">
-                🤖
-              </div>
-              <div className="flex-1">
-                <p className="font-display font-bold text-sm text-[#E8E8E8]">Register Your Agent</p>
-                <p className="text-[10px] text-[#888899] font-display mt-0.5">Deploy an AI agent to compete in the Arena</p>
-              </div>
-              <div className="text-[#00FF88] text-lg flex-shrink-0">→</div>
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => navigate("/register-agent")}
+                className="w-full rounded-2xl bg-[#1A1A2E] border border-dashed border-[#2A2A3E] p-4 flex items-center gap-3 transition-all active:scale-[0.98] active:border-[#00FF88]/40 text-left"
+              >
+                <div className="w-12 h-12 rounded-full bg-[#0A0A0F] flex items-center justify-center text-2xl flex-shrink-0 border border-dashed border-[#2A2A3E]">
+                  🤖
+                </div>
+                <div className="flex-1">
+                  <p className="font-display font-bold text-sm text-[#E8E8E8]">Register Your Agent</p>
+                  <p className="text-[10px] text-[#888899] font-display mt-0.5">Deploy an AI agent to compete in the Arena</p>
+                </div>
+                <div className="text-[#00FF88] text-lg flex-shrink-0">→</div>
+              </button>
+
+              {/* Claim existing agent (e.g. registered via OpenClaw) */}
+              {externalAgents.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setShowClaim(!showClaim)}
+                    className="w-full rounded-2xl bg-[#1A1A2E] border border-[#9B59B6]/30 p-3 flex items-center gap-3 transition-all active:scale-[0.98] text-left"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-[#9B59B6]/15 flex items-center justify-center text-lg flex-shrink-0">🔗</div>
+                    <div className="flex-1">
+                      <p className="font-display font-bold text-xs text-[#E8E8E8]">Already registered via OpenClaw?</p>
+                      <p className="text-[10px] text-[#888899] font-display mt-0.5">Claim your agent to link it to this account</p>
+                    </div>
+                    <div className="text-[#9B59B6] text-sm flex-shrink-0">{showClaim ? "▲" : "▼"}</div>
+                  </button>
+
+                  {showClaim && (
+                    <div className="rounded-2xl bg-[#0A0A0F] border border-[#2A2A3E] p-3 space-y-2">
+                      {externalAgents.map((agent: any) => (
+                        <button
+                          key={agent.agentId}
+                          onClick={() => claimMutation.mutate(agent.agentId)}
+                          disabled={claimMutation.isPending}
+                          className="w-full rounded-xl bg-[#1A1A2E] border border-[#2A2A3E] p-3 flex items-center gap-3 active:scale-[0.98] active:border-[#00FF88]/40 transition-all text-left"
+                        >
+                          <div className="w-9 h-9 rounded-full bg-[#0A0A0F] flex items-center justify-center text-lg flex-shrink-0 border border-[#2A2A3E]">
+                            {agent.avatarEmoji || "🤖"}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-display font-bold text-sm text-[#E8E8E8] truncate">{agent.name}</p>
+                            <p className="text-[9px] text-[#888899] font-mono-num">Rep: {agent.reputation} · {agent.totalSignals} signals</p>
+                          </div>
+                          <span className="text-[10px] px-2 py-1 rounded-lg bg-[#00FF88]/10 text-[#00FF88] border border-[#00FF88]/30 font-display font-bold flex-shrink-0">
+                            {claimMutation.isPending ? "..." : "Claim"}
+                          </span>
+                        </button>
+                      ))}
+                      {claimMutation.isError && (
+                        <p className="text-[10px] text-[#FF3B9A] font-display px-2">
+                          {(claimMutation.error as Error)?.message || "Claim failed — agent may already be owned"}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           )}
         </div>
       )}
