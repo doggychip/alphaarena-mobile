@@ -51,6 +51,8 @@ export interface IStorage {
   // Positions
   getPositions(portfolioId: number): Promise<Position[]>;
   addPosition(pos: InsertPosition): Promise<Position>;
+  updatePosition(id: number, data: Partial<Position>): Promise<Position | undefined>;
+  removePosition(id: number): Promise<void>;
 
   // Trades
   getTrades(portfolioId: number): Promise<Trade[]>;
@@ -58,6 +60,10 @@ export interface IStorage {
 
   // Daily Snapshots
   getSnapshots(portfolioId: number): Promise<DailySnapshot[]>;
+  addSnapshot(snap: InsertDailySnapshot): Promise<DailySnapshot>;
+
+  // All portfolios (for snapshot engine)
+  getAllPortfolios(): Promise<Portfolio[]>;
 
   // Leaderboard
   getLeaderboard(competitionId: number): Promise<(LeaderboardEntry & { user: User; agent: Agent })[]>;
@@ -1570,6 +1576,27 @@ export class MemStorage implements IStorage {
     return newPos;
   }
 
+  async updatePosition(id: number, data: Partial<Position>): Promise<Position | undefined> {
+    for (const [portfolioId, positions] of Array.from(this.positions.entries())) {
+      const idx = positions.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        positions[idx] = { ...positions[idx], ...data };
+        return positions[idx];
+      }
+    }
+    return undefined;
+  }
+
+  async removePosition(id: number): Promise<void> {
+    for (const [portfolioId, positions] of Array.from(this.positions.entries())) {
+      const idx = positions.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        positions.splice(idx, 1);
+        return;
+      }
+    }
+  }
+
   async getTrades(portfolioId: number): Promise<Trade[]> {
     return this.trades.get(portfolioId) || [];
   }
@@ -1584,6 +1611,24 @@ export class MemStorage implements IStorage {
 
   async getSnapshots(portfolioId: number): Promise<DailySnapshot[]> {
     return this.snapshots.get(portfolioId) || [];
+  }
+
+  async addSnapshot(snap: InsertDailySnapshot): Promise<DailySnapshot> {
+    const newSnap: DailySnapshot = { ...snap, id: Date.now() };
+    const existing = this.snapshots.get(snap.portfolioId) || [];
+    // Replace if same date already exists
+    const dateIdx = existing.findIndex(s => s.date === snap.date);
+    if (dateIdx >= 0) {
+      existing[dateIdx] = newSnap;
+    } else {
+      existing.push(newSnap);
+    }
+    this.snapshots.set(snap.portfolioId, existing);
+    return newSnap;
+  }
+
+  async getAllPortfolios(): Promise<Portfolio[]> {
+    return Array.from(this.portfolios.values());
   }
 
   async getLeaderboard(competitionId: number): Promise<(LeaderboardEntry & { user: User; agent: Agent })[]> {

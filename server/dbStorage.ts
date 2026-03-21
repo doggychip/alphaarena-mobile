@@ -8,7 +8,7 @@ import type {
   Portfolio,
   Position, InsertPosition,
   Trade, InsertTrade,
-  DailySnapshot,
+  DailySnapshot, InsertDailySnapshot,
   LeaderboardEntry,
   Achievement, InsertAchievement,
   AgentMessage,
@@ -153,6 +153,19 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async updatePosition(id: number, data: Partial<Position>): Promise<Position | undefined> {
+    const result = await getDb()
+      .update(positions)
+      .set(data)
+      .where(eq(positions.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async removePosition(id: number): Promise<void> {
+    await getDb().delete(positions).where(eq(positions.id, id));
+  }
+
   // ===================== TRADES =====================
 
   async getTrades(portfolioId: number): Promise<Trade[]> {
@@ -176,6 +189,29 @@ export class DatabaseStorage implements IStorage {
       .from(dailySnapshots)
       .where(eq(dailySnapshots.portfolioId, portfolioId))
       .orderBy(dailySnapshots.date);
+  }
+
+  async addSnapshot(snap: InsertDailySnapshot): Promise<DailySnapshot> {
+    // Upsert: replace if same portfolio + date
+    const existing = await getDb()
+      .select()
+      .from(dailySnapshots)
+      .where(and(eq(dailySnapshots.portfolioId, snap.portfolioId), eq(dailySnapshots.date, snap.date)))
+      .limit(1);
+    if (existing.length > 0) {
+      const result = await getDb()
+        .update(dailySnapshots)
+        .set(snap)
+        .where(eq(dailySnapshots.id, existing[0].id))
+        .returning();
+      return result[0];
+    }
+    const result = await getDb().insert(dailySnapshots).values(snap).returning();
+    return result[0];
+  }
+
+  async getAllPortfolios(): Promise<Portfolio[]> {
+    return getDb().select().from(portfolios);
   }
 
   // ===================== LEADERBOARD =====================

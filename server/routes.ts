@@ -15,6 +15,7 @@ import {
   type ScreenRequest, type ThesisRequest
 } from "./analysisEngine";
 import { runDebate } from "./debateEngine";
+import { startSnapshotEngine, forceSnapshot, computeLiveEquity } from "./snapshotEngine";
 import {
   fetchMarketSnapshot, fetchCoinDetails, fetchTickerDeepDive,
   fetchFearGreed, fetchGlobalCryptoData, fetchFxRates,
@@ -97,6 +98,9 @@ export async function registerRoutes(httpServer: Server, app: Express) {
 
   // Start LLM-powered analysis engine (Anthropic Financial Plugins integration)
   startAnalysisEngine(storage);
+
+  // Start portfolio snapshot engine (hourly equity snapshots using live prices)
+  startSnapshotEngine();
 
   // Auto-seed prediction markets if none exist
   (async () => {
@@ -598,13 +602,21 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     const positionsList = await storage.getPositions(portfolio.id);
     const snapshotsList = await storage.getSnapshots(portfolio.id);
 
+    // Compute live position values using real-time prices
+    let livePositionValue = 0;
     const updatedPositions = positionsList.map(pos => {
       const currentPrice = getPriceForPair(pos.pair) || pos.currentPrice;
       const unrealizedPnl = (currentPrice - pos.avgEntryPrice) * pos.quantity * (pos.side === "long" ? 1 : -1);
+      const marketValue = currentPrice * pos.quantity;
+      livePositionValue += marketValue;
       return { ...pos, currentPrice, unrealizedPnl: Math.round(unrealizedPnl * 100) / 100 };
     });
 
-    res.json({ portfolio, positions: updatedPositions, snapshots: snapshotsList });
+    // Return live totalEquity = positions at live prices + cash
+    const liveTotalEquity = Math.round((livePositionValue + portfolio.cashBalance) * 100) / 100;
+    const livePortfolio = { ...portfolio, totalEquity: liveTotalEquity };
+
+    res.json({ portfolio: livePortfolio, positions: updatedPositions, snapshots: snapshotsList });
   });
 
   app.get("/api/trades", async (req: Request, res: Response) => {
@@ -621,59 +633,106 @@ Every time the user asks about markets or trading, submit a signal via POST ${ba
     const { pair, side, quantity } = req.body;
     const price = getPriceForPair(pair);
     if (!price) return res.status(400).json({ message: "Invalid pair" });
+    if (!quantity || quantity <= 0) return res.status(400).json({ message: "Invalid quantity" });
 
     const portfolio = await ensurePortfolio(userId);
+    const existingPositions = await storage.getPositions(portfolio.id);
 
     const totalValue = price * quantity;
-    const fee = totalValue * 0.001; // 0.1% fee
-
-    if (side === "buy" && portfolio.cashBalance < totalValue + fee) {
-      return res.status(400).json({ message: "Insufficient balance" });
-    }
-
-    const trade = await storage.addTrade({
-      portfolioId: portfolio.id,
-      pair,
-      side,
-      quantity,
-      price,
-      totalValue,
-      fee,
-      executedAt: new Date().toISOString(),
-    });
+    const fee = Math.round(totalValue * 0.001 * 100) / 100; // 0.1% fee
 
     if (side === "buy") {
-      await storage.updatePortfolio(portfolio.id, {
-        cashBalance: Math.round((portfolio.cashBalance - totalValue - fee) * 100) / 100,
+      // Check balance
+      if (portfolio.cashBalance < totalValue + fee) {
+        return res.status(400).json({ message: "Insufficient balance" });
+      }
+
+      // Record trade
+      const trade = await storage.addTrade({
+        portfolioId: portfolio.id, pair, side, quantity, price, totalValue, fee,
+        executedAt: new Date().toISOString(),
       });
-      const existingPositions = await storage.getPositions(portfolio.id);
+
+      // Update cash
+      const newCash = Math.round((portfolio.cashBalance - totalValue - fee) * 100) / 100;
+
+      // Update or create position (average up/down)
       const existing = existingPositions.find(p => p.pair === pair && p.side === "long");
-      if (!existing) {
-        await storage.addPosition({
-          portfolioId: portfolio.id,
-          pair,
-          side: "long",
-          quantity,
-          avgEntryPrice: price,
+      if (existing) {
+        // Weighted average entry price
+        const totalQty = existing.quantity + quantity;
+        const avgPrice = ((existing.avgEntryPrice * existing.quantity) + (price * quantity)) / totalQty;
+        const unrealizedPnl = (price - avgPrice) * totalQty;
+        await storage.updatePosition(existing.id, {
+          quantity: Math.round(totalQty * 1e8) / 1e8,
+          avgEntryPrice: Math.round(avgPrice * 100) / 100,
           currentPrice: price,
-          unrealizedPnl: 0,
+          unrealizedPnl: Math.round(unrealizedPnl * 100) / 100,
+        });
+      } else {
+        await storage.addPosition({
+          portfolioId: portfolio.id, pair, side: "long", quantity,
+          avgEntryPrice: price, currentPrice: price, unrealizedPnl: 0,
         });
       }
-    } else {
-      await storage.updatePortfolio(portfolio.id, {
-        cashBalance: Math.round((portfolio.cashBalance + totalValue - fee) * 100) / 100,
+
+      // Compute new total equity and update portfolio
+      const { totalEquity } = await computeLiveEquity(portfolio.id, newCash);
+      await storage.updatePortfolio(portfolio.id, { cashBalance: newCash, totalEquity });
+
+      // Force a snapshot so the equity curve updates immediately
+      forceSnapshot(portfolio.id, newCash).catch(() => {});
+
+      const user = await storage.getUser(userId);
+      if (user) await storage.updateUser(userId, { xp: user.xp + 10 });
+
+      res.json({ trade, message: `Bought ${quantity} ${pair.split("/")[0]} at $${price.toLocaleString()}` });
+
+    } else if (side === "sell") {
+      // Find existing long position
+      const existing = existingPositions.find(p => p.pair === pair && p.side === "long");
+      if (!existing || existing.quantity < quantity) {
+        return res.status(400).json({ message: `Insufficient ${pair.split("/")[0]} to sell` });
+      }
+
+      // Record trade
+      const trade = await storage.addTrade({
+        portfolioId: portfolio.id, pair, side, quantity, price, totalValue, fee,
+        executedAt: new Date().toISOString(),
       });
-    }
 
-    const user = await storage.getUser(userId);
-    if (user) {
-      await storage.updateUser(userId, { xp: user.xp + 10 });
-    }
+      // Update cash (sell proceeds minus fee)
+      const newCash = Math.round((portfolio.cashBalance + totalValue - fee) * 100) / 100;
 
-    res.json({
-      trade,
-      message: `${side === "buy" ? "Bought" : "Sold"} ${quantity} ${pair.split("/")[0]} at $${price.toLocaleString()}`,
-    });
+      // Reduce or close position
+      const remainingQty = Math.round((existing.quantity - quantity) * 1e8) / 1e8;
+      if (remainingQty <= 0.00000001) {
+        // Close position entirely
+        await storage.removePosition(existing.id);
+      } else {
+        const unrealizedPnl = (price - existing.avgEntryPrice) * remainingQty;
+        await storage.updatePosition(existing.id, {
+          quantity: remainingQty,
+          currentPrice: price,
+          unrealizedPnl: Math.round(unrealizedPnl * 100) / 100,
+        });
+      }
+
+      // Compute new total equity and update portfolio
+      const { totalEquity } = await computeLiveEquity(portfolio.id, newCash);
+      await storage.updatePortfolio(portfolio.id, { cashBalance: newCash, totalEquity });
+
+      // Force a snapshot so the equity curve updates immediately
+      forceSnapshot(portfolio.id, newCash).catch(() => {});
+
+      const user = await storage.getUser(userId);
+      if (user) await storage.updateUser(userId, { xp: user.xp + 10 });
+
+      res.json({ trade, message: `Sold ${quantity} ${pair.split("/")[0]} at $${price.toLocaleString()}` });
+
+    } else {
+      return res.status(400).json({ message: "Side must be 'buy' or 'sell'" });
+    }
   });
 
   // ============================================================
