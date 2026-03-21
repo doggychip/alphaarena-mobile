@@ -19,7 +19,7 @@ import {
 } from "./marketDataService";
 
 // ── Config ──────────────────────────────────────────────────────────────
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "sk-af8fc2d824cc48a79dee836d13ab28ed";
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 const SIGNAL_CYCLE_MS = 30 * 60 * 1000; // 30 min between LLM signal cycles
 const INITIAL_DELAY_MS = 30 * 1000; // 30 seconds after startup
 const MAX_RETRIES = 2;
