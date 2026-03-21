@@ -502,10 +502,26 @@ export default function Home() {
         <PriceTicker prices={prices} />
       </div>
 
+      {/* Lazy Mode Banner — prominent CTA */}
+      <Link href="/lazy">
+        <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-neon-green/15 via-[#1A1A2E] to-neon-cyan/15 border border-neon-green/40 px-4 py-4 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-neon-green/5 to-transparent animate-pulse" style={{ animationDuration: '3s' }} />
+          <div className="relative text-3xl">😴</div>
+          <div className="relative flex-1">
+            <div className="flex items-center gap-2">
+              <p className="font-display font-bold text-sm text-[#E8E8E8]">Lazy Mode</p>
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-green/20 text-neon-green border border-neon-green/30 font-display font-bold">NEW</span>
+            </div>
+            <p className="text-[10px] text-[#888899] mt-0.5">One tap. AI trades for you. You chill.</p>
+          </div>
+          <span className="relative text-neon-green text-xl font-bold">⚡</span>
+        </div>
+      </Link>
+
       {/* Agent Discovery Banner — always visible */}
       {agent && (
         <Link href="/pick-agent">
-          <div className="mx-4 mt-4 rounded-2xl bg-gradient-to-r from-neon-cyan/10 to-neon-pink/10 border border-neon-cyan/30 px-4 py-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform">
+          <div className="mx-4 mt-3 rounded-2xl bg-gradient-to-r from-neon-cyan/10 to-neon-pink/10 border border-neon-cyan/30 px-4 py-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-transform">
             <div className="flex -space-x-2">
               <span className="text-xl">🐂</span>
               <span className="text-xl">🐻</span>

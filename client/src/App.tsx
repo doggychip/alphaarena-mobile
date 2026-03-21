@@ -26,6 +26,7 @@ import CustomizeAgent from "@/pages/CustomizeAgent";
 import ResearchTools from "@/pages/ResearchTools";
 import AgentDirectory from "@/pages/AgentDirectory";
 import Play from "@/pages/Play";
+import LazyMode from "@/pages/LazyMode";
 import NotFound from "@/pages/not-found";
 
 function LoadingScreen() {
@@ -177,6 +178,7 @@ function AppRouter() {
               <Route path="/agent-directory" component={AgentDirectory} />
               <Route path="/customize-agent" component={CustomizeAgent} />
               <Route path="/play" component={Play} />
+              <Route path="/lazy" component={LazyMode} />
               <Route path="/research" component={ResearchTools} />
               <Route path="/stake" component={Stake} />
               <Route path="/profile" component={Profile} />
