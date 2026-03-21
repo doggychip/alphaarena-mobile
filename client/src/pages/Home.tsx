@@ -580,9 +580,13 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Portfolio Summary */}
-      <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
-        <p className="text-xs text-[#888899] font-display mb-1">📊 Your Portfolio</p>
+      {/* Portfolio Summary — tap to see charts */}
+      <Link href="/portfolio">
+      <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4 active:scale-[0.98] transition-transform cursor-pointer">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs text-[#888899] font-display">📊 Your Portfolio</p>
+          <span className="text-[9px] text-neon-cyan font-display">View Charts →</span>
+        </div>
         <div className="flex items-baseline gap-2">
           <span className="font-mono-num text-3xl font-bold text-[#E8E8E8]">
             ${totalEquity.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -614,6 +618,7 @@ export default function Home() {
           <span className="text-[10px] text-[#888899]">⬜ Cash</span>
         </div>
       </div>
+      </Link>
 
       {/* Trending Now */}
       <div className="mx-4 mt-4">
