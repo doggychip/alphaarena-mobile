@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Switch, Route, Router, useLocation, Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
@@ -5,6 +6,7 @@ import { QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-q
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import Tutorial from "@/components/Tutorial";
 import Home from "@/pages/Home";
 import Arena from "@/pages/Arena";
 import AgentPage from "@/pages/AgentPage";
@@ -111,14 +113,46 @@ export function useGuestMode() {
   return { isGuest, setGuest };
 }
 
+// Hook to track tutorial state
+export function useTutorialState() {
+  const qc = useQueryClient();
+  const { data: seen = true } = useQuery({
+    queryKey: ["tutorial-seen"],
+    queryFn: () => localStorage.getItem("alphaarena_tutorial_done") === "true",
+    staleTime: Infinity,
+  });
+  const markDone = () => {
+    localStorage.setItem("alphaarena_tutorial_done", "true");
+    qc.setQueryData(["tutorial-seen"], true);
+  };
+  const reset = () => {
+    localStorage.removeItem("alphaarena_tutorial_done");
+    qc.setQueryData(["tutorial-seen"], false);
+  };
+  return { tutorialSeen: seen, markDone, reset };
+}
+
 function AppRouter() {
   const { user, isLoading } = useAuth();
   const { isGuest } = useGuestMode();
+  const { tutorialSeen, markDone } = useTutorialState();
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  // Check if tutorial should show after auth resolves
+  const shouldShowTutorial = (user || isGuest) && !tutorialSeen && !showTutorial;
+  if (shouldShowTutorial && !showTutorial) {
+    // Delay slightly so user sees the app loaded
+    setTimeout(() => setShowTutorial(true), 300);
+  }
 
   if (isLoading) return <LoadingScreen />;
 
   return (
     <div className="dark min-h-screen bg-background text-foreground">
+      {/* Tutorial overlay for first-time users */}
+      {showTutorial && !tutorialSeen && (
+        <Tutorial onComplete={() => { markDone(); setShowTutorial(false); }} />
+      )}
       <div className="max-w-[430px] mx-auto pb-20 relative">
         <Switch>
           <Route path="/auth" component={Auth} />

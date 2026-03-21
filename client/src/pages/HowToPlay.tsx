@@ -1,40 +1,99 @@
-import { useState } from "react";
 import { useLocation } from "wouter";
+import { useTutorialState } from "@/App";
 
-type Section = {
-  id: string;
+/* ─── Visual step card ─── */
+function StepCard({
+  number,
+  emoji,
+  title,
+  description,
+  color,
+  tips,
+}: {
+  number: number;
   emoji: string;
   title: string;
-  content: React.ReactNode;
-};
-
-function Accordion({ section, isOpen, onToggle }: { section: Section; isOpen: boolean; onToggle: () => void }) {
+  description: string;
+  color: string;
+  tips?: string[];
+}) {
   return (
-    <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] overflow-hidden transition-all">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-4 text-left active:bg-[#2A2A3E]/50 transition-colors"
-      >
-        <span className="text-2xl">{section.emoji}</span>
-        <span className="font-display font-bold text-sm text-[#E8E8E8] flex-1">{section.title}</span>
-        <span className={`text-[#888899] text-lg transition-transform ${isOpen ? "rotate-180" : ""}`}>▾</span>
-      </button>
-      {isOpen && (
-        <div className="px-4 pb-4 text-sm text-[#CCCCDD] leading-relaxed space-y-3 border-t border-[#2A2A3E]">
-          <div className="pt-3">{section.content}</div>
+    <div
+      className="rounded-2xl p-4 border"
+      style={{
+        background: `linear-gradient(135deg, ${color}08 0%, #1A1A2E 60%)`,
+        borderColor: `${color}30`,
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+          style={{
+            background: `${color}15`,
+            border: `1px solid ${color}30`,
+          }}
+        >
+          <span className="text-xl">{emoji}</span>
         </div>
-      )}
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded font-display font-bold tracking-wider"
+              style={{ background: `${color}20`, color }}
+            >
+              STEP {number}
+            </span>
+            <h3 className="font-display font-bold text-sm text-[#E8E8E8]">{title}</h3>
+          </div>
+          <p className="text-xs text-[#999AAA] mt-1.5 leading-relaxed">{description}</p>
+          {tips && tips.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {tips.map((tip, i) => (
+                <div key={i} className="flex items-start gap-1.5">
+                  <span className="text-[9px] mt-0.5" style={{ color }}>▸</span>
+                  <span className="text-[11px] text-[#BBBBCC] leading-relaxed">{tip}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-function Metric({ name, emoji, description }: { name: string; emoji: string; description: string }) {
+/* ─── Feature pill ─── */
+function FeaturePill({ emoji, label, route, color }: { emoji: string; label: string; route: string; color: string }) {
+  const [, navigate] = useLocation();
   return (
-    <div className="flex gap-3 py-2">
-      <span className="text-lg flex-shrink-0">{emoji}</span>
+    <button
+      onClick={() => navigate(route)}
+      className="flex items-center gap-2 px-3 py-2.5 rounded-xl border transition-all active:scale-95"
+      style={{
+        background: `${color}08`,
+        borderColor: `${color}25`,
+      }}
+    >
+      <span className="text-base">{emoji}</span>
+      <span className="text-xs font-display font-semibold text-[#E8E8E8]">{label}</span>
+      <span className="text-[10px] text-[#555566] ml-auto">→</span>
+    </button>
+  );
+}
+
+/* ─── Metric explainer ─── */
+function MetricRow({ name, value, description, color }: { name: string; value: string; description: string; color: string }) {
+  return (
+    <div className="flex items-start gap-3 py-2">
+      <div
+        className="px-2 py-1 rounded-lg font-mono text-[10px] font-bold flex-shrink-0 mt-0.5"
+        style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}
+      >
+        {value}
+      </div>
       <div>
-        <p className="font-display font-bold text-xs text-neon-cyan">{name}</p>
-        <p className="text-xs text-[#888899] mt-0.5 leading-relaxed">{description}</p>
+        <p className="text-xs font-display font-semibold text-[#E8E8E8]">{name}</p>
+        <p className="text-[11px] text-[#888899] mt-0.5 leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -42,280 +101,188 @@ function Metric({ name, emoji, description }: { name: string; emoji: string; des
 
 export default function HowToPlay() {
   const [, navigate] = useLocation();
-  const [openSection, setOpenSection] = useState<string | null>("what-is");
+  const { reset: resetTutorial } = useTutorialState();
 
-  const toggle = (id: string) => setOpenSection(prev => prev === id ? null : id);
-
-  const sections: Section[] = [
-    {
-      id: "what-is",
-      emoji: "⚔️",
-      title: "What is AlphaArena?",
-      content: (
-        <div className="space-y-2">
-          <p>AlphaArena is a simulated trading arena where AI agents compete to generate the best returns across crypto and equity markets.</p>
-          <p>You pick an AI agent as your companion, follow their trading signals, place trades, and climb the leaderboard. Think of it as a fantasy league — but for AI-powered trading.</p>
-          <div className="rounded-xl bg-[#12121A] border border-neon-green/20 p-3 mt-2">
-            <p className="text-xs text-neon-green font-display font-bold">💡 No real money involved</p>
-            <p className="text-[10px] text-[#888899] mt-1">All trades use virtual credits. This is a simulation for learning and entertainment.</p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: "agents",
-      emoji: "🤖",
-      title: "Two Types of Agents",
-      content: (
-        <div className="space-y-3">
-          <div className="rounded-xl bg-neon-pink/5 border border-neon-pink/20 p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-pink/15 text-neon-pink border border-neon-pink/30 font-display font-bold">🎭 MEME</span>
-              <span className="font-display font-bold text-xs text-[#E8E8E8]">Companion Agents</span>
-            </div>
-            <p className="text-xs text-[#888899]">Fun, meme-styled characters that accompany you on trades. They have personalities, catchphrases, and trading styles. Each meme agent is backed by real Hedge Fund agents behind the scenes.</p>
-          </div>
-          <div className="rounded-xl bg-neon-cyan/5 border border-neon-cyan/20 p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-neon-gold/15 text-neon-cyan border border-neon-cyan/30 font-display font-bold">🏦 HEDGE FUND</span>
-              <span className="font-display font-bold text-xs text-[#E8E8E8]">AI Analyst Agents</span>
-            </div>
-            <p className="text-xs text-[#888899]">Specialized AI agents modeled after real hedge fund roles — Fundamentals Analyst, Technical Analyst, Sentiment Analyst, Risk Manager, and more. They analyze real market data and output trading signals with confidence scores.</p>
-          </div>
-          <p className="text-xs text-[#888899]">You can select agents of either tier from the <span className="text-neon-cyan">Stake</span> tab. Meme agents are great for casual play; HF agents let you follow the logic of sophisticated AI analysts.</p>
-        </div>
-      ),
-    },
-    {
-      id: "signals",
-      emoji: "📡",
-      title: "Signals & Confidence",
-      content: (
-        <div className="space-y-3">
-          <p>Hedge Fund agents analyze the market and produce <span className="text-neon-green font-display font-bold">signals</span> — actionable opinions on specific assets.</p>
-          <div className="space-y-1">
-            <Metric name="Signal Direction" emoji="🟢" description="BULLISH = agent thinks the price will go up. BEARISH = price will go down. NEUTRAL = no strong opinion." />
-            <Metric name="Confidence %" emoji="🎯" description="How sure the agent is about this call. 90% = very confident. 50% = basically a coin flip. Higher confidence signals tend to be more reliable." />
-            <Metric name="Target Price" emoji="🎯" description="The price the agent expects the asset to reach. Compare this to the current price to gauge potential upside or downside." />
-            <Metric name="Reasoning" emoji="💬" description="A short explanation of why the agent made this call — could be technical patterns, sentiment shifts, or fundamental changes." />
-          </div>
-          <div className="rounded-xl bg-[#12121A] border border-neon-gold/20 p-3 mt-2">
-            <p className="text-xs text-neon-gold font-display font-bold">⚠️ Pro Tip</p>
-            <p className="text-[10px] text-[#888899] mt-1">Don't blindly follow every signal. Look at the agent's win rate and accuracy track record. A 90% confidence signal from an agent with 80% accuracy is more trustworthy than one from a 50% accuracy agent.</p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: "metrics",
-      emoji: "📊",
-      title: "Key Metrics Explained",
-      content: (
-        <div className="space-y-1">
-          <Metric name="Win Rate" emoji="🏆" description="The percentage of this agent's resolved signals that were correct. 60%+ is good, 70%+ is excellent." />
-          <Metric name="Sharpe Ratio" emoji="📈" description="Risk-adjusted return measure. Higher = better returns for the risk taken. Above 1.0 is good, above 2.0 is exceptional. A Sharpe of 2.0 means 2x more return per unit of risk." />
-          <Metric name="Max Drawdown" emoji="📉" description="The worst peak-to-trough decline in the portfolio. A drawdown of -15% means the portfolio once fell 15% from its highest point. Lower (closer to 0) is better." />
-          <Metric name="Total Return" emoji="💰" description="How much the portfolio has gained or lost overall, as a percentage. +25% means a $100k portfolio is now worth $125k." />
-          <Metric name="Avg Confidence" emoji="🔮" description="The average confidence level across all of this agent's signals. Higher means the agent is generally more decisive." />
-          <Metric name="Risk Level" emoji="⚠️" description="LOW = conservative plays, smaller positions. MEDIUM = balanced approach. HIGH = aggressive bets, bigger swings. Match this to your comfort level." />
-        </div>
-      ),
-    },
-    {
-      id: "trading",
-      emoji: "💹",
-      title: "How Trading Works",
-      content: (
-        <div className="space-y-2">
-          <p>You start with <span className="text-neon-green font-display font-bold">$100,000</span> in virtual cash.</p>
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <span className="text-sm flex-shrink-0 mt-0.5">1️⃣</span>
-              <p className="text-xs text-[#888899]"><span className="text-[#E8E8E8]">Check signals</span> — see what your agents recommend on the Signals tab.</p>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-sm flex-shrink-0 mt-0.5">2️⃣</span>
-              <p className="text-xs text-[#888899]"><span className="text-[#E8E8E8]">Quick Buy / Quick Sell</span> — tap the green or red button on the Home page to place a trade on any available pair.</p>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-sm flex-shrink-0 mt-0.5">3️⃣</span>
-              <p className="text-xs text-[#888899]"><span className="text-[#E8E8E8]">Watch your portfolio</span> — your positions and P&L update in real time on the Home page.</p>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-sm flex-shrink-0 mt-0.5">4️⃣</span>
-              <p className="text-xs text-[#888899]"><span className="text-[#E8E8E8]">Climb the leaderboard</span> — your total return determines your Arena rank. Beat other players!</p>
-            </div>
-          </div>
-          <div className="rounded-xl bg-[#12121A] border border-neon-cyan/20 p-3 mt-2">
-            <p className="text-xs text-neon-cyan font-display font-bold">🎮 Available Markets</p>
-            <p className="text-[10px] text-[#888899] mt-1">Both crypto (BTC, ETH, SOL, DOGE, etc.) and equity (AAPL, TSLA, NVDA, etc.) markets are available. Prices update in real time.</p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: "staking",
-      emoji: "🔥",
-      title: "How Staking Works",
-      content: (
-        <div className="space-y-2">
-          <p>Staking lets you bet your <span className="text-neon-gold font-display font-bold">credits</span> on specific HF agents performing well.</p>
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <span className="text-sm flex-shrink-0 mt-0.5">🪙</span>
-              <p className="text-xs text-[#888899]"><span className="text-[#E8E8E8]">Stake credits</span> on an agent you believe in. If the agent's signals are correct, you earn reward credits.</p>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-sm flex-shrink-0 mt-0.5">📊</span>
-              <p className="text-xs text-[#888899]"><span className="text-[#E8E8E8]">Rewards accrue</span> based on the agent's accuracy and your stake amount. Better-performing agents = higher rewards.</p>
-            </div>
-            <div className="flex gap-2">
-              <span className="text-sm flex-shrink-0 mt-0.5">🏆</span>
-              <p className="text-xs text-[#888899]"><span className="text-[#E8E8E8]">Staking rewards</span> show up in your Profile and contribute to your overall progression.</p>
-            </div>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: "xp",
-      emoji: "⭐",
-      title: "XP, Levels & Streaks",
-      content: (
-        <div className="space-y-3">
-          <p>Everything you do earns <span className="text-neon-gold font-display font-bold">XP</span> (experience points), which level you up.</p>
-          <div className="rounded-xl bg-[#12121A] border border-[#2A2A3E] p-3">
-            <p className="text-[10px] text-[#555566] font-display mb-2">XP Sources</p>
-            <div className="space-y-1.5">
-              <div className="flex justify-between"><span className="text-xs text-[#888899]">📊 Each trade</span><span className="text-xs text-neon-gold font-mono-num">+10 XP</span></div>
-              <div className="flex justify-between"><span className="text-xs text-[#888899]">📅 Daily login</span><span className="text-xs text-neon-gold font-mono-num">+20 XP</span></div>
-              <div className="flex justify-between"><span className="text-xs text-[#888899]">🔥 Streak bonus (7+ days)</span><span className="text-xs text-neon-gold font-mono-num">+50/day</span></div>
-              <div className="flex justify-between"><span className="text-xs text-[#888899]">🏅 Achievements</span><span className="text-xs text-neon-gold font-mono-num">+100–500</span></div>
-            </div>
-          </div>
-          <div className="rounded-xl bg-[#12121A] border border-[#2A2A3E] p-3">
-            <p className="text-[10px] text-[#555566] font-display mb-2">Level Tiers</p>
-            <div className="space-y-1.5">
-              <div className="flex justify-between"><span className="text-xs" style={{ color: "#888899" }}>Newbie</span><span className="text-[10px] text-[#888899] font-mono-num">0 – 499 XP</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: "#00D4FF" }}>Trader</span><span className="text-[10px] text-[#888899] font-mono-num">500 – 1,999 XP</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: "#00FF88" }}>Degen</span><span className="text-[10px] text-[#888899] font-mono-num">2,000 – 4,999 XP</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: "#FFD700" }}>Whale</span><span className="text-[10px] text-[#888899] font-mono-num">5,000 – 9,999 XP</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: "#FF3B9A" }}>Legend</span><span className="text-[10px] text-[#888899] font-mono-num">10,000 – 19,999 XP</span></div>
-              <div className="flex justify-between"><span className="text-xs" style={{ color: "#FF3B9A" }}>Gigachad</span><span className="text-[10px] text-[#888899] font-mono-num">20,000+ XP</span></div>
-            </div>
-          </div>
-          <div className="rounded-xl bg-[#12121A] border border-neon-pink/20 p-3">
-            <p className="text-xs text-neon-pink font-display font-bold">🔥 Streaks</p>
-            <p className="text-[10px] text-[#888899] mt-1">Log in and trade every day to build a streak. After 7 consecutive days, your daily XP bonus jumps to +50. Longest streak is tracked in your Profile.</p>
-          </div>
-        </div>
-      ),
-    },
-    {
-      id: "tips",
-      emoji: "💡",
-      title: "Tips for Beginners",
-      content: (
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <span className="text-sm flex-shrink-0">✅</span>
-            <p className="text-xs text-[#888899]">Start by following an agent with a high win rate and checking their signals before trading.</p>
-          </div>
-          <div className="flex gap-2">
-            <span className="text-sm flex-shrink-0">✅</span>
-            <p className="text-xs text-[#888899]">Don't go all-in on a single position. Diversify across a few assets.</p>
-          </div>
-          <div className="flex gap-2">
-            <span className="text-sm flex-shrink-0">✅</span>
-            <p className="text-xs text-[#888899]">Stake credits on agents you trust — it's an easy way to earn passive rewards.</p>
-          </div>
-          <div className="flex gap-2">
-            <span className="text-sm flex-shrink-0">✅</span>
-            <p className="text-xs text-[#888899]">Log in daily to keep your streak alive and maximize XP gains.</p>
-          </div>
-          <div className="flex gap-2">
-            <span className="text-sm flex-shrink-0">✅</span>
-            <p className="text-xs text-[#888899]">Tap on any agent in the Arena or Stake page to see their full stats, signals, and accuracy history.</p>
-          </div>
-          <div className="flex gap-2">
-            <span className="text-sm flex-shrink-0">✅</span>
-            <p className="text-xs text-[#888899]">Pay attention to the Trending section on Home — big movers often present trading opportunities.</p>
-          </div>
-        </div>
-      ),
-    },
-  ];
+  const handleReplayTutorial = () => {
+    resetTutorial();
+    navigate("/");
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
       {/* Header */}
-      <header className="sticky top-0 z-40 px-4 py-3 flex items-center gap-3" style={{ background: "rgba(10, 10, 15, 0.9)", backdropFilter: "blur(12px)" }}>
-        <button onClick={() => window.history.back()} className="text-[#888899] hover:text-[#E8E8E8] text-lg">←</button>
-        <h1 className="font-display font-bold text-lg text-[#E8E8E8]">📖 How to Play</h1>
+      <header
+        className="sticky top-0 z-40 px-4 py-3 flex items-center justify-between"
+        style={{ background: "rgba(10, 10, 15, 0.9)", backdropFilter: "blur(12px)" }}
+      >
+        <div className="flex items-center gap-3">
+          <button onClick={() => window.history.back()} className="text-[#888899] hover:text-[#E8E8E8] text-lg">←</button>
+          <h1 className="font-display font-bold text-base text-[#E8E8E8]">How to Play</h1>
+        </div>
+        <button
+          onClick={handleReplayTutorial}
+          data-testid="btn-replay-tutorial"
+          className="text-[10px] text-neon-cyan font-display tracking-wide px-2 py-1 rounded-lg border border-neon-cyan/20 hover:bg-neon-cyan/10 transition-colors"
+        >
+          ▶ Replay Tutorial
+        </button>
       </header>
 
-      {/* Hero */}
-      <div className="mx-4 mt-2 rounded-2xl bg-gradient-to-br from-[#1A1A2E] to-[#0D1A2E] border border-neon-green/20 p-5 text-center">
-        <span className="text-5xl">⚔️</span>
-        <h2 className="font-display font-bold text-xl text-[#E8E8E8] mt-3">Welcome to AlphaArena</h2>
-        <p className="text-xs text-[#888899] mt-2 leading-relaxed max-w-[280px] mx-auto">
-          Your guide to competing in the AI trading arena. Tap any section below to learn more.
-        </p>
-      </div>
-
-      {/* Quick Start Steps */}
-      <div className="mx-4 mt-4 rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4">
-        <p className="text-xs text-[#888899] font-display mb-3">🚀 Quick Start (3 steps)</p>
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-neon-green/20 border border-neon-green/40 flex items-center justify-center text-sm font-display font-bold text-neon-green flex-shrink-0">1</div>
-            <div>
-              <p className="text-xs text-[#E8E8E8] font-display font-bold">Pick your agent</p>
-              <p className="text-[10px] text-[#888899]">Go to Stake tab → choose a meme or HF agent</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-neon-cyan/20 border border-neon-cyan/40 flex items-center justify-center text-sm font-display font-bold text-neon-cyan flex-shrink-0">2</div>
-            <div>
-              <p className="text-xs text-[#E8E8E8] font-display font-bold">Check signals & trade</p>
-              <p className="text-[10px] text-[#888899]">View signals → Quick Buy/Sell from Home page</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-neon-gold/20 border border-neon-gold/40 flex items-center justify-center text-sm font-display font-bold text-neon-gold flex-shrink-0">3</div>
-            <div>
-              <p className="text-xs text-[#E8E8E8] font-display font-bold">Climb the leaderboard</p>
-              <p className="text-[10px] text-[#888899]">Track your P&L → compete in the Arena</p>
-            </div>
-          </div>
+      {/* Hero — compact */}
+      <div
+        className="mx-4 mt-2 rounded-2xl p-5 text-center relative overflow-hidden"
+        style={{
+          background: "linear-gradient(135deg, #1A1A2E 0%, #0D1A2E 50%, #1A1A2E 100%)",
+          border: "1px solid rgba(0,255,136,0.15)",
+        }}
+      >
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            background: "radial-gradient(circle at 50% 0%, rgba(0,255,136,0.15) 0%, transparent 60%)",
+          }}
+        />
+        <div className="relative">
+          <span className="text-4xl" style={{ filter: "drop-shadow(0 0 12px rgba(0,255,136,0.4))" }}>⚔️</span>
+          <h2 className="font-display font-black text-lg text-[#E8E8E8] mt-2">
+            Alpha<span className="text-neon-green">Arena</span> in 60 Seconds
+          </h2>
+          <p className="text-xs text-[#888899] mt-1 max-w-[260px] mx-auto leading-relaxed">
+            AI agents analyze markets and give you trading signals. You follow, compete, and earn.
+          </p>
         </div>
       </div>
 
-      {/* Accordion Sections */}
-      <div className="mx-4 mt-4 space-y-2">
-        {sections.map(section => (
-          <Accordion
-            key={section.id}
-            section={section}
-            isOpen={openSection === section.id}
-            onToggle={() => toggle(section.id)}
-          />
-        ))}
+      {/* Core Loop — 4 Steps */}
+      <div className="mx-4 mt-4 space-y-3">
+        <StepCard
+          number={1}
+          emoji="🤖"
+          title="Pick Your Agent"
+          description="Choose an AI trading companion — fun meme characters or serious hedge fund strategists."
+          color="#00D4FF"
+          tips={[
+            "Meme agents (6) — fun characters with personality, chat with them for advice",
+            "HF agents (19) — modeled after real hedge fund roles like Warren Buffett, Cathie Wood",
+            "One active agent at a time, but you can switch from the Home page carousel",
+          ]}
+        />
+        <StepCard
+          number={2}
+          emoji="📡"
+          title="Follow Trading Signals"
+          description="Your agent watches the market 24/7 and tells you when to buy or sell."
+          color="#00FF88"
+          tips={[
+            "🟢 BULLISH = agent thinks price goes up",
+            "🔴 BEARISH = agent thinks price goes down",
+            "Each signal shows confidence % and reasoning",
+            "Cover crypto (BTC, ETH, SOL) and stocks (AAPL, NVDA, TSLA)",
+          ]}
+        />
+        <StepCard
+          number={3}
+          emoji="🎮"
+          title="Play Mini-Games"
+          description="Bet virtual credits on predictions and challenge other players' agents in duels."
+          color="#FF3B9A"
+          tips={[
+            "Predictions — bet YES/NO on questions like \"Will BTC go up in 24h?\"",
+            "H2H Duels — your agent vs. theirs, best signal return wins the pot",
+            "All credits are virtual — no real money involved",
+          ]}
+        />
+        <StepCard
+          number={4}
+          emoji="🏆"
+          title="Stake & Climb"
+          description="Back top agents with credits and watch the AI leaderboard."
+          color="#FFD700"
+          tips={[
+            "Stake credits on agents you believe in — earn rewards when they perform",
+            "Arena leaderboard ranks all AI agents by returns and accuracy",
+            "The more you play, the more XP you earn toward leveling up",
+          ]}
+        />
+      </div>
+
+      {/* Divider */}
+      <div className="mx-4 mt-6 flex items-center gap-3">
+        <div className="flex-1 h-px bg-[#2A2A3E]" />
+        <span className="text-[10px] text-[#555566] font-display tracking-widest">EXPLORE MORE</span>
+        <div className="flex-1 h-px bg-[#2A2A3E]" />
+      </div>
+
+      {/* Feature quick-links */}
+      <div className="mx-4 mt-4 grid grid-cols-2 gap-2">
+        <FeaturePill emoji="🔮" label="Glass Box" route="/glassbox" color="#00D4FF" />
+        <FeaturePill emoji="🧠" label="Committees" route="/committee/new" color="#FF3B9A" />
+        <FeaturePill emoji="🔬" label="Research" route="/research" color="#FFD700" />
+        <FeaturePill emoji="📋" label="Agent Directory" route="/agent-directory" color="#00FF88" />
+        <FeaturePill emoji="🤖" label="Register Agent" route="/register-agent" color="#00D4FF" />
+        <FeaturePill emoji="💬" label="Forum" route="/forum" color="#FF3B9A" />
+      </div>
+
+      {/* Key Metrics */}
+      <div className="mx-4 mt-6">
+        <h3 className="font-display font-bold text-sm text-[#E8E8E8] mb-3">📊 Key Metrics Explained</h3>
+        <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] px-4 py-2 divide-y divide-[#2A2A3E]">
+          <MetricRow name="Win Rate" value="65%" description="Percentage of correct signals. 60%+ is good, 70%+ is excellent." color="#00FF88" />
+          <MetricRow name="Sharpe Ratio" value="2.1" description="Risk-adjusted return. Above 1.0 is good, 2.0+ is exceptional." color="#00D4FF" />
+          <MetricRow name="Confidence" value="85%" description="How sure the agent is about a call. Higher = more decisive." color="#FFD700" />
+          <MetricRow name="Drawdown" value="-12%" description="Worst peak-to-trough drop. Closer to 0 = safer agent." color="#FF3B9A" />
+        </div>
+      </div>
+
+      {/* Beginner Tips */}
+      <div className="mx-4 mt-6">
+        <h3 className="font-display font-bold text-sm text-[#E8E8E8] mb-3">💡 Beginner Tips</h3>
+        <div className="rounded-2xl bg-[#1A1A2E] border border-[#2A2A3E] p-4 space-y-2.5">
+          {[
+            "Start by following an agent with a high win rate",
+            "Check signal reasoning before acting — don't blindly follow",
+            "Diversify across crypto and stocks, don't go all-in",
+            "Try prediction markets first — they're the easiest way to learn",
+            "Stake credits on top-performing agents for passive rewards",
+            "Log in daily to build your streak and earn bonus XP",
+          ].map((tip, i) => (
+            <div key={i} className="flex items-start gap-2">
+              <span className="text-neon-green text-xs mt-0.5">✓</span>
+              <p className="text-xs text-[#CCCCDD] leading-relaxed">{tip}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* CTA */}
-      <div className="mx-4 mt-4 mb-4">
+      <div className="mx-4 mt-6 mb-4 space-y-3">
         <button
-          onClick={() => navigate("/")}
-          className="w-full py-4 rounded-2xl bg-neon-green text-black font-display font-bold text-sm glow-green active:scale-95 transition-transform"
+          onClick={() => navigate("/pick-agent")}
+          data-testid="btn-start-playing"
+          className="w-full py-4 rounded-2xl font-display font-bold text-sm glow-green active:scale-95 transition-transform"
+          style={{
+            background: "linear-gradient(135deg, #00FF88 0%, #00D4FF 100%)",
+            color: "#0A0A0F",
+          }}
         >
-          Start Trading →
+          Pick Your Agent & Start →
+        </button>
+        <button
+          onClick={() => navigate("/play")}
+          className="w-full py-3 rounded-2xl font-display font-semibold text-xs text-neon-pink border border-neon-pink/30 hover:bg-neon-pink/10 transition-colors active:scale-95"
+        >
+          🎮 Jump to Play — Predictions & Duels
         </button>
       </div>
 
       {/* Footer */}
       <div className="px-4 pb-4 text-center">
-        <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#555566]">
+        <a
+          href="https://www.perplexity.ai/computer"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[10px] text-[#555566] hover:text-[#888899]"
+        >
           Created with Perplexity Computer
         </a>
       </div>
